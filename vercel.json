@@ -1,0 +1,7 @@
+{
+  "framework": "nextjs",
+  "regions": ["icn1"],
+  "functions": {
+    "app/api/resources/[id]/analyze/route.ts": { "maxDuration": 300 }
+  }
+}
