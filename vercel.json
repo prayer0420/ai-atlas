@@ -1,6 +1,10 @@
 {
   "framework": "nextjs",
   "regions": ["icn1"],
+  "crons": [
+    { "path": "/api/cron/daily", "schedule": "0 0 * * *" },
+    { "path": "/api/cron/wiki", "schedule": "0 2 * * *" }
+  ],
   "functions": {
     "app/api/resources/[id]/analyze/route.ts": { "maxDuration": 300 }
   }

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import "./brain.css";
 export const metadata: Metadata = {
   title: "AI Atlas · 나만의 AI 지식 지도",
   description:

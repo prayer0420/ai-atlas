@@ -115,3 +115,17 @@ node --env-file=.env.local scripts/check.mjs
 - [Vercel AI Gateway OIDC 인증](https://vercel.com/docs/ai-gateway/authentication-and-byok/oidc)
 - [Vercel AI Gateway Responses API](https://vercel.com/docs/ai-gateway/sdks-and-apis/openresponses)
 - [YouTube transcript 라이브러리 원본](https://github.com/Kakulukian/youtube-transcript)
+
+## 매일 수집 · 카드뉴스 · LLM Wiki · Obsidian
+
+- `오늘의 AI`: OpenAI·Google AI·Hugging Face·arXiv·Two Minute Papers·GeekNews의 공개 피드를 수집합니다. 원문 날짜, 출처, 실제 공개 조회수와 선정 이유를 표시합니다. 이전 날짜에 소개한 항목은 다음 카드에서 제외합니다.
+- Vercel Cron: 매일 한국 시간 **09시대 수집**, **11시대 Wiki 정리**. Hobby에서는 해당 시간대 안에서 실행되므로 정확한 분을 보장하지 않습니다. PC를 켜둘 필요가 없습니다. `CRON_SECRET` 서버 환경변수가 필수이며 익명 호출은 차단합니다.
+- 한 번에 1~5개 주제, 주제별 3~6장의 카드와 복습 질문을 만듭니다. 카드 PNG는 1080×1350입니다. AI가 불가능하면 명확히 표시된 원문 미리보기를 저장합니다.
+- Instagram·Threads의 전체 인기 게시물 자동 수집은 제공하지 않습니다. 해당 플랫폼은 링크와 본문을 직접 저장합니다. 추천 점수는 선택한 피드 안에서의 최신성·관심 주제·공개 조회수에 기반하며 플랫폼 전체 인기 순위가 아닙니다.
+- Wiki는 저장 자료를 개념·도구·가이드로 연결하고, 출처 UUID와 버전 이력을 보존합니다. 검토 완료 문서는 자동 갱신하지 않습니다. 질문 답변도 출처가 있는 문서로 저장합니다. 일일 작업 시도는 10회, 같은 작업 재시도는 하루 3회입니다.
+- Obsidian ZIP 또는 Chrome/Edge의 폴더 연결로 `raw/`, `library/`, `wiki/`, `daily/`, `personal/`, `index.md`, `log.md`, `SCHEMA.md`, Canvas를 내보냅니다. 웹→로컬 단방향이며 자동 백그라운드 동기화는 아닙니다. 사용자가 Obsidian에서 수정한 파일은 건너뛰고, 파일 삭제는 하지 않습니다.
+- 개인 보관함: `C:\Users\c\OneDrive\문서\AI Atlas Second Brain`. Obsidian에서 이 폴더를 보관함으로 열면 됩니다. 기존 보관함 설정이나 개인 메모는 덮어쓰지 않습니다.
+- 마이그레이션 `20260917154144_atlas_daily_wiki.sql`은 운영 Supabase에 적용됐습니다. 여섯 신규 테이블은 RLS를 사용하고, 클라이언트에는 본인 데이터 조회만 허용합니다.
+- 실제 공개 자료 70건 수집, 3개 주제의 미리보기 저장, 중복 없는 라이브러리 보관, 학습 표시, 16개 파일 내보내기와 익명 요청 차단을 검증했습니다. AI 카드 및 Wiki 생성의 실제 모델 호출은 Gateway 활성화 후 검증해야 합니다.
+
+설계 참고: [LLM Wiki 원본 아이디어](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f), [Obsidian 도움말](https://help.obsidian.md/), [Vercel Cron 실행 시간](https://vercel.com/docs/cron-jobs/usage-and-pricing).

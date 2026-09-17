@@ -82,6 +82,7 @@ export function sourceType(url: string) {
 export async function safeFetch(
   raw: string,
   redirects = 0,
+  allowFeed = false,
 ): Promise<{ text: string; url: string; type: string }> {
   const url = validateUrl(raw);
   if (redirects > 3)
@@ -101,7 +102,9 @@ export async function safeFetch(
         family: pinned.family,
         headers: {
           "User-Agent": "AIAtlas/1.0 (personal learning archive)",
-          Accept: "text/html,text/plain,application/xhtml+xml",
+          Accept: allowFeed
+            ? "application/rss+xml,application/atom+xml,application/xml,text/xml,text/plain"
+            : "text/html,text/plain,application/xhtml+xml",
           "Accept-Encoding": "identity",
         },
         lookup: (_hostname, _options, cb) => {
@@ -116,6 +119,7 @@ export async function safeFetch(
           safeFetch(
             new URL(res.headers.location, url).href,
             redirects + 1,
+            allowFeed,
           ).then(resolve, reject);
           return;
         }
@@ -132,7 +136,9 @@ export async function safeFetch(
         }
         const type = String(res.headers["content-type"] || "");
         if (
-          !/text\/html|text\/plain|application\/xhtml\+xml/.test(type) ||
+          !(allowFeed
+            ? /xml|text\/plain/.test(type)
+            : /text\/html|text\/plain|application\/xhtml\+xml/.test(type)) ||
           (res.headers["content-encoding"] &&
             res.headers["content-encoding"] !== "identity")
         ) {

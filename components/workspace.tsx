@@ -36,6 +36,8 @@ import {
   Network,
   AlertCircle,
   RotateCcw,
+  CalendarDays,
+  FolderSync,
 } from "lucide-react";
 import {
   categories,
@@ -46,8 +48,21 @@ import {
 import { demoResources } from "@/lib/demo";
 import { Cover } from "./diagram";
 import { LessonView } from "./lesson-view";
+import dynamic from "next/dynamic";
+const BrainPanel = dynamic(() =>
+  import("./brain-panel").then((module) => module.BrainPanel),
+);
 type View =
-  "library" | "favorites" | "learned" | "inbox" | "map" | "trash" | "settings";
+  | "library"
+  | "favorites"
+  | "learned"
+  | "inbox"
+  | "map"
+  | "trash"
+  | "settings"
+  | "daily"
+  | "wiki"
+  | "obsidian";
 const statusNames = {
   saved: "분석 대기",
   analyzing: "분석 중",
@@ -162,7 +177,7 @@ export function Workspace() {
     [client],
   );
   const load = useCallback(async () => {
-    if (!session) return;
+    if (!session || ["daily", "wiki", "obsidian"].includes(view)) return;
     const version = ++loadVersion.current;
     setLoading(true);
     setError("");
@@ -437,6 +452,9 @@ export function Workspace() {
           map: "분야별 지식 지도",
           trash: "휴지통",
           settings: "연결 설정",
+          daily: "오늘의 AI",
+          wiki: "지식 위키",
+          obsidian: "Obsidian · Second Brain",
         }[view];
   return (
     <div className="app-shell">
@@ -470,6 +488,9 @@ export function Workspace() {
           {(
             [
               ["library", BookOpen, "지식 라이브러리"],
+              ["daily", CalendarDays, "오늘의 AI"],
+              ["wiki", Network, "지식 위키"],
+              ["obsidian", FolderSync, "Obsidian 보관함"],
               ["inbox", FolderOpen, "수집함"],
               ["favorites", Bookmark, "즐겨찾기"],
               ["learned", Check, "학습 완료"],
@@ -608,6 +629,22 @@ export function Workspace() {
               onAnalyze={() => analyze()}
               busy={busy}
               onTrash={trash}
+            />
+          ) : view === "daily" || view === "wiki" || view === "obsidian" ? (
+            <BrainPanel
+              key={view + ":" + (session?.user.id || "demo")}
+              view={view}
+              signedIn={!!session}
+              api={api}
+              onLogin={requireAuth}
+              onResource={async (id) => {
+                try {
+                  const result = await api("/api/resources/" + id);
+                  setSelected(result.resource);
+                } catch (e) {
+                  setError((e as Error).message);
+                }
+              }}
             />
           ) : (
             <>
