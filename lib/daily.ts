@@ -10,6 +10,7 @@ import {
 } from "./feeds";
 import { sourceType, extract } from "./extract";
 import { enqueue, queueLocally, localRuntime } from "./automation";
+import { formatDaily } from "./daily-format";
 import {
   issueSchema,
   type FeedItem,
@@ -329,7 +330,7 @@ export async function runDaily(userId: string) {
             "카드뉴스의 출처 연결을 검증하지 못했습니다.",
             502,
           );
-        content = generated.value;
+        content = formatDaily(generated.value, items, date);
         mode = "ai";
         if (job.id)
           checkDb(

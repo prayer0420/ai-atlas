@@ -120,6 +120,7 @@ export function Workspace() {
   const [page, setPage] = useState(0);
   const isDemo = !session;
   const captureHandled = useRef(false);
+  const deepLinkHandled = useRef(false);
   useEffect(() => {
     if (!authReady || captureHandled.current) return;
     const p = new URLSearchParams(window.location.search);
@@ -230,6 +231,26 @@ export function Workspace() {
     }
   }, [api, session, query, category, source, view, sort, page]);
   useEffect(() => {
+    if (!authReady || deepLinkHandled.current) return;
+    const p = new URLSearchParams(window.location.search),
+      id = p.get("resource"),
+      slug = p.get("wiki");
+    if (!id && !slug) return;
+    if (!session) {
+      setDialog("auth");
+      return;
+    }
+    deepLinkHandled.current = true;
+    if (slug) {
+      setView("wiki");
+      return;
+    }
+    if (id)
+      void api("/api/resources/" + encodeURIComponent(id))
+        .then((r) => setSelected(r.resource))
+        .catch((e) => setError((e as Error).message));
+  }, [authReady, session, api]);
+  useEffect(() => {
     if (session) {
       const timer = setTimeout(load, 250);
       return () => {
@@ -274,6 +295,7 @@ export function Workspace() {
     };
   }, [resources, selected, api]);
   function navigate(v: View, cat = "전체") {
+    window.history.replaceState(null, "", window.location.pathname);
     setWikiSource(null);
     setView(v);
     setCategory(cat);
@@ -294,6 +316,11 @@ export function Workspace() {
     try {
       const data = await api("/api/resources/" + r.id);
       setSelected(data.resource);
+      window.history.replaceState(
+        null,
+        "",
+        "?resource=" + encodeURIComponent(r.id),
+      );
     } catch (e) {
       setError((e as Error).message);
     }
@@ -676,7 +703,10 @@ export function Workspace() {
             <LessonView
               key={selected.id}
               resource={selected}
-              onBack={() => setSelected(null)}
+              onBack={() => {
+                setSelected(null);
+                window.history.replaceState(null, "", window.location.pathname);
+              }}
               onUpdate={update}
               onAnalyze={() => analyze()}
               busy={busy}

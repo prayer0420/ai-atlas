@@ -140,7 +140,7 @@ export async function compileWiki(
     );
   const chosen = (
     sourceId ? candidates.filter((r) => r.id === sourceId) : candidates
-  ).slice(0, localRuntime() ? 3 : 12);
+  ).slice(0, localRuntime() ? 2 : 12);
   if (!chosen.length)
     return { written: 0, message: "현재 자료가 위키에 반영되어 있습니다." };
   const sourceResult = await db
@@ -176,7 +176,7 @@ export async function compileWiki(
             ),
           ),
       )
-      .slice(0, 12);
+      .slice(0, localRuntime() ? 2 : 12);
     const activeIds = new Set((index.data || []).map((r) => r.id));
     const knownIds = new Set(
       [
@@ -202,17 +202,20 @@ export async function compileWiki(
               title: r.title,
               source_url: r.source_url,
               method: r.source_method,
-              text: r.raw_text.slice(0, 5000),
+              text: r.raw_text.slice(0, localRuntime() ? 3000 : 5000),
+              excerpt_only: r.raw_text.length > (localRuntime() ? 3000 : 5000),
               lesson: r.lesson
                 ? {
-                    summary: r.lesson.summary,
-                    takeaways: r.lesson.takeaways,
-                    glossary: r.lesson.glossary,
-                    sections: r.lesson.sections.map((s) => ({
-                      ...s,
-                      body: s.body.slice(0, 1800),
-                      example: s.example.slice(0, 700),
-                    })),
+                    summary: r.lesson.summary.slice(0, 800),
+                    takeaways: r.lesson.takeaways.slice(0, 4),
+                    glossary: r.lesson.glossary.slice(0, 4),
+                    sections: r.lesson.sections
+                      .slice(0, localRuntime() ? 3 : 7)
+                      .map((s) => ({
+                        ...s,
+                        body: s.body.slice(0, localRuntime() ? 700 : 1800),
+                        example: s.example.slice(0, localRuntime() ? 300 : 700),
+                      })),
                     comparison: r.lesson.comparison,
                     practice: r.lesson.practice,
                     caveats: r.lesson.caveats,
@@ -224,13 +227,13 @@ export async function compileWiki(
               .map((p) => ({
                 slug: p.slug,
                 title: p.title,
-                summary: p.summary,
+                summary: p.summary.slice(0, localRuntime() ? 150 : 500),
                 protected: p.protected,
               }))
-              .slice(0, 100),
+              .slice(0, localRuntime() ? 30 : 100),
             existing: related.map((p) => ({
               ...p,
-              body: p.body.slice(0, 5000),
+              body: p.body.slice(0, localRuntime() ? 2000 : 5000),
             })),
           },
           10000,

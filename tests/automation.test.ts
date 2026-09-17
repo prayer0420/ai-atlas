@@ -14,6 +14,7 @@ import { syncLocalVault } from "../lib/vault-sync";
 import { localStructured } from "../lib/local-ai";
 import { z } from "zod";
 import { cardSvg } from "../lib/card-image";
+import { formatDaily } from "../lib/daily-format";
 test("Local queue isolates users, deduplicates work, recovers expired leases, and fences old workers", async () => {
   const db = new PGlite();
   const alice = "11111111-1111-4111-8111-111111111111",
@@ -177,6 +178,44 @@ test("Archived card images escape source text and preserve the complete message"
   assert.ok(svg.includes("&lt;script&gt;"));
   assert.ok(svg.includes('width="1080" height="1350"'));
   assert.ok(svg.includes('role="img"'));
+});
+test("Daily cards keep their source and end in the actual recall question", () => {
+  const story = {
+    feed_id: "11111111-1111-4111-8111-111111111111",
+    headline: "주제",
+    takeaway: "자료의 주장",
+    concepts: [],
+    quiz: { question: "무엇을 배웠나요?", answer: "핵심 설명" },
+    slides: [
+      {
+        kind: "hook" as const,
+        title: "처음",
+        body: "원문의 설명",
+        bullets: [],
+      },
+      {
+        kind: "explain" as const,
+        title: "다음",
+        body: "개념 설명",
+        bullets: [],
+      },
+      {
+        kind: "check" as const,
+        title: "마지막",
+        body: "질문이 아닌 반복 문장",
+        bullets: [],
+      },
+    ],
+  };
+  const formatted = formatDaily(
+    { title: "한 소식만 가리키는 제목", introduction: "", stories: [story] },
+    [],
+    "2026-09-18",
+  );
+  assert.equal(formatted.title, "오늘의 AI · 2026-09-18");
+  assert.equal(formatted.stories[0].slides.at(-1)?.body, story.quiz.question);
+  assert.equal(formatted.stories[0].slides[1].body, story.slides[1].body);
+  assert.ok(formatted.stories[0].takeaway.startsWith("출처의 설명:"));
 });
 test("Automatic Obsidian sync updates generated files and preserves user edits and immutable raw sources", async () => {
   const root = await mkdtemp(join(tmpdir(), "atlas-sync-test-"));

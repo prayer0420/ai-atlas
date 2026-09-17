@@ -271,6 +271,22 @@ export function BrainPanel({
   const exportCard = useRef<HTMLDivElement>(null);
   const [topicText, setTopicText] = useState("");
   const generation = useRef(0);
+  const initialLink = useRef(false);
+  useEffect(() => {
+    if (view !== "wiki" || !data?.pages || initialLink.current) return;
+    initialLink.current = true;
+    const slug = new URLSearchParams(window.location.search).get("wiki");
+    if (slug && data.pages.some((p: WikiPage) => p.slug === slug))
+      setSelectedSlug(slug);
+  }, [view, data?.pages]);
+  useEffect(() => {
+    if (view === "wiki" && selectedSlug)
+      window.history.replaceState(
+        null,
+        "",
+        "?wiki=" + encodeURIComponent(selectedSlug),
+      );
+  }, [view, selectedSlug]);
   const load = useCallback(async () => {
     if (!signedIn) return;
     const n = ++generation.current;

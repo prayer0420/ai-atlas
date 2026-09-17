@@ -20,7 +20,7 @@ export async function localStructured<T extends z.ZodType>(
       keep_alive: "5m",
       options: {
         temperature: 0,
-        num_ctx: 16384,
+        num_ctx: 32768,
         num_predict: Math.min(maxTokens, 8000),
         num_thread: 8,
       },
