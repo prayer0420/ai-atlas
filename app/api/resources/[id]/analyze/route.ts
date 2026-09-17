@@ -143,13 +143,16 @@ export async function POST(
       problem = new AppError(
         candidate.status === 429
           ? "AI 서비스의 사용 한도에 도달했습니다. 잠시 후 다시 시도해 주세요."
-          : candidate.status === 401
-            ? "AI API 인증에 실패했습니다. 서버의 API 키를 확인해 주세요."
-            : candidate.status === 402
-              ? "AI 서비스의 사용 가능한 크레딧이 없습니다. 원문은 저장되어 있으며, 크레딧 연결 후 다시 분석할 수 있습니다."
-              : candidate.name?.includes("Timeout")
-                ? "분석 시간이 초과되었습니다. 본문을 나누어 다시 시도해 주세요."
-                : "분석을 완료하지 못했습니다. 원문은 보존되어 있으니 다시 시도해 주세요.",
+          : candidate.status === 403 &&
+              candidate.message?.includes("credit card")
+            ? "AI 서비스를 아직 활성화하지 않았습니다. Vercel AI Gateway에서 크레딧을 활성화하거나 AI API 키를 연결한 뒤 다시 분석해 주세요. 원문은 보존되어 있습니다."
+            : candidate.status === 401
+              ? "AI API 인증에 실패했습니다. 서버의 API 키를 확인해 주세요."
+              : candidate.status === 402
+                ? "AI 서비스의 사용 가능한 크레딧이 없습니다. 원문은 저장되어 있으며, 크레딧 연결 후 다시 분석할 수 있습니다."
+                : candidate.name?.includes("Timeout")
+                  ? "분석 시간이 초과되었습니다. 본문을 나누어 다시 시도해 주세요."
+                  : "분석을 완료하지 못했습니다. 원문은 보존되어 있으니 다시 시도해 주세요.",
         502,
       );
     }
