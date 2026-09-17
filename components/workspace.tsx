@@ -48,6 +48,7 @@ import {
 import { demoResources } from "@/lib/demo";
 import { Cover } from "./diagram";
 import { LessonView } from "./lesson-view";
+import { readingExcerpt } from "@/lib/reading";
 import dynamic from "next/dynamic";
 const BrainPanel = dynamic(() =>
   import("./brain-panel").then((module) => module.BrainPanel),
@@ -89,6 +90,7 @@ export function Workspace() {
   const [resources, setResources] = useState<Resource[]>(demoResources);
   const [selected, setSelected] = useState<Resource | null>(null);
   const [view, setView] = useState<View>("library");
+  const [wikiSource, setWikiSource] = useState<string | null>(null);
   const [category, setCategory] = useState("전체");
   const [query, setQuery] = useState("");
   const [source, setSource] = useState("all");
@@ -228,6 +230,7 @@ export function Workspace() {
     return () => clearInterval(timer);
   }, [resources, session, load]);
   function navigate(v: View, cat = "전체") {
+    setWikiSource(null);
     setView(v);
     setCategory(cat);
     setSelected(null);
@@ -606,7 +609,7 @@ export function Workspace() {
             )}
           </div>
         </header>
-        <main id="main">
+        <main id="main" tabIndex={-1}>
           {error && (
             <div className="error-banner" role="alert">
               <AlertCircle size={18} />
@@ -629,6 +632,11 @@ export function Workspace() {
               onAnalyze={() => analyze()}
               busy={busy}
               onTrash={trash}
+              onWiki={() => {
+                const id = selected.id;
+                navigate("wiki");
+                setWikiSource(id);
+              }}
             />
           ) : view === "daily" || view === "wiki" || view === "obsidian" ? (
             <BrainPanel
@@ -637,6 +645,12 @@ export function Workspace() {
               signedIn={!!session}
               api={api}
               onLogin={requireAuth}
+              sourceId={wikiSource}
+              onWiki={(id) => {
+                navigate("wiki");
+                setWikiSource(id);
+              }}
+              onClearSource={() => setWikiSource(null)}
               onResource={async (id) => {
                 try {
                   const result = await api("/api/resources/" + id);
@@ -934,6 +948,7 @@ export function Workspace() {
                             }
                           >
                             <Cover
+                              diagram={r.lesson?.diagram || r.visual}
                               category={r.category}
                               index={categories.indexOf(
                                 r.category as (typeof categories)[number],
@@ -956,10 +971,13 @@ export function Workspace() {
                               </div>
                               <h2>{r.title}</h2>
                               <p>
-                                {r.lesson?.summary ||
-                                  (r as Resource & { summary?: string })
-                                    .summary ||
-                                  "원문을 저장했어요. AI로 개념과 활용 방법을 정리해 보세요."}
+                                {readingExcerpt(
+                                  r.lesson?.takeaways[0] ||
+                                    r.lesson?.summary ||
+                                    r.summary ||
+                                    "원문 보관 중 · 분석 후 핵심 요약과 자료별 개념도가 표시됩니다.",
+                                  130,
+                                )}
                               </p>
                               <div className="card-tags">
                                 {(r.tags.length ? r.tags : [r.category])

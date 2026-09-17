@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
     let q = db
       .from("ai_atlas_resources")
       .select(
-        "id,title,source_url,source_type,category,tags,status,favorite,learned,created_at,updated_at,deleted_at,error_message,summary:lesson->>summary",
+        "id,title,source_url,source_type,category,tags,status,favorite,learned,created_at,updated_at,deleted_at,error_message,summary:lesson->>summary,visual:lesson->diagram",
         { count: "exact" },
       )
       .eq("user_id", user.id);

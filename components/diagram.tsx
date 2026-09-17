@@ -1,13 +1,44 @@
 "use client";
-import { ArrowRight, RotateCcw, Download, Layers, Check } from "lucide-react";
+import {
+  ArrowRight,
+  RotateCcw,
+  Download,
+  Layers,
+  Check,
+  Search,
+  Database,
+  FileText,
+  BrainCircuit,
+  MessageSquare,
+  ShieldCheck,
+} from "lucide-react";
 import { useRef, useState } from "react";
 import type { Lesson } from "@/lib/types";
+import { readingExcerpt } from "@/lib/reading";
+function ConceptIcon({ label }: { label: string }) {
+  const Icon = /검색|질의|retriev|search/i.test(label)
+    ? Search
+    : /저장|벡터|데이터|index/i.test(label)
+      ? Database
+      : /문서|자료|원문|입력/i.test(label)
+        ? FileText
+        : /검증|검토|평가|확인/i.test(label)
+          ? ShieldCheck
+          : /답변|응답|출력/i.test(label)
+            ? MessageSquare
+            : /모델|생성|llm|학습/i.test(label)
+              ? BrainCircuit
+              : Layers;
+  return <Icon size={25} aria-hidden="true" />;
+}
 export function Diagram({
   diagram,
   compact = false,
+  summary = false,
 }: {
   diagram: Lesson["diagram"];
   compact?: boolean;
+  summary?: boolean;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [saved, setSaved] = useState(false);
@@ -31,7 +62,12 @@ export function Diagram({
   }
   return (
     <div className={`diagram-wrap ${compact ? "compact" : ""}`}>
-      <div ref={ref} className={`diagram ${diagram.kind}`}>
+      <div
+        ref={ref}
+        className={`diagram ${diagram.kind} ${summary ? "diagram-summary" : ""}`}
+        role="group"
+        aria-label={diagram.title}
+      >
         <div className="diagram-heading">
           <span>
             <Layers size={16} /> {diagram.title}
@@ -42,14 +78,21 @@ export function Diagram({
           {diagram.nodes.map((node, i) => (
             <div className="diagram-step" key={i}>
               <div className="diagram-node">
+                <span className="concept-icon">
+                  <ConceptIcon label={node.label} />
+                </span>
                 <span className="node-num">
                   {String(i + 1).padStart(2, "0")}
                 </span>
                 <strong>{node.label}</strong>
-                {!compact && <p>{node.description}</p>}
+                {!compact && !summary && <p>{node.description}</p>}
               </div>
               {i < diagram.nodes.length - 1 && (
-                <ArrowRight className="diagram-arrow" size={20} />
+                <ArrowRight
+                  className="diagram-arrow"
+                  size={20}
+                  aria-hidden="true"
+                />
               )}
             </div>
           ))}
@@ -57,10 +100,24 @@ export function Diagram({
         {!compact && (
           <p className="diagram-caption">
             {diagram.kind === "cycle" && <RotateCcw size={16} />}{" "}
-            {diagram.caption}
+            {summary ? readingExcerpt(diagram.caption, 160) : diagram.caption}
           </p>
         )}
       </div>
+      {summary && (
+        <details className="diagram-text">
+          <summary>개념도를 글로 읽기</summary>
+          <ol>
+            {diagram.nodes.map((n, i) => (
+              <li key={i}>
+                <strong>{n.label}</strong>
+                <p>{n.description}</p>
+              </li>
+            ))}
+          </ol>
+          <p>{diagram.caption}</p>
+        </details>
+      )}
       {!compact && (
         <div className="diagram-actions">
           <span>{error || "개념의 흐름을 한 장으로 기억하세요."}</span>
@@ -76,9 +133,11 @@ export function Diagram({
 export function Cover({
   category,
   index = 0,
+  diagram,
 }: {
   category: string;
   index?: number;
+  diagram?: Lesson["diagram"] | null;
 }) {
   const sets: Record<string, string[]> = {
     "AI 에이전트": ["목표", "도구", "실행", "확인"],
@@ -89,25 +148,31 @@ export function Cover({
     생산성: ["수집", "정리", "실행", "검토"],
     "산업·트렌드": ["기술", "제품", "산업", "변화"],
   };
-  const nodes = sets[category] || sets["AI 기초"];
+  const nodes =
+    diagram?.nodes.map((n) => n.label) || sets[category] || sets["AI 기초"];
   return (
     <div
-      className={`cover cover-${index % 4}`}
-      aria-label={`${category} 분야 개념 흐름`}
+      className={`cover cover-${Math.max(0, index) % 4} ${diagram ? "cover-evidence" : ""} cover-kind-${diagram?.kind || "flow"}`}
+      role="img"
+      aria-label={
+        diagram
+          ? `${diagram.title}: ${nodes.join(diagram.kind === "cycle" ? " → " : " · ")}${diagram.kind === "cycle" ? " → " + nodes[0] : ""}`
+          : `${category} 분야 안내도. 이 자료의 분석 결과는 아닙니다.`
+      }
     >
       <span className="cover-label">
-        {category.toUpperCase()} <span>↗</span>
+        {diagram ? "이 자료의 개념도" : category + " · 분야 안내"}
       </span>
       <div className="cover-flow">
         {nodes.map((n, i) => (
-          <div className="cover-step" key={n}>
+          <div className="cover-step" key={i}>
             <span>{n}</span>
-            {i < 3 && <ArrowRight size={13} />}
+            {i < nodes.length - 1 && <ArrowRight size={15} />}
           </div>
         ))}
       </div>
       <span className="cover-bottom">
-        AI ATLAS <span>COLLECT · CONNECT · LEARN</span>
+        {diagram?.title || "분석 후 자료별 개념도가 표시됩니다."}
       </span>
     </div>
   );

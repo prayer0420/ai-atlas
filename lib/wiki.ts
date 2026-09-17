@@ -45,7 +45,11 @@ function hash(value: unknown) {
     .digest("hex")
     .slice(0, 32);
 }
-export async function compileWiki(userId: string, question?: string) {
+export async function compileWiki(
+  userId: string,
+  question?: string,
+  sourceId?: string,
+) {
   if (!aiConfigured())
     throw new AppError(
       "AI 서비스 연결 후 위키를 작성할 수 있습니다. 원문은 이미 저장되어 있습니다.",
@@ -128,7 +132,9 @@ export async function compileWiki(userId: string, question?: string) {
           (p) => p.source_ids.includes(r.id) && p.updated_at >= r.updated_at,
         ),
     );
-  const chosen = candidates.slice(0, 12);
+  const chosen = (
+    sourceId ? candidates.filter((r) => r.id === sourceId) : candidates
+  ).slice(0, 12);
   if (!chosen.length)
     return { written: 0, message: "현재 자료가 위키에 반영되어 있습니다." };
   const sourceResult = await db
@@ -196,6 +202,14 @@ export async function compileWiki(userId: string, question?: string) {
                     summary: r.lesson.summary,
                     takeaways: r.lesson.takeaways,
                     glossary: r.lesson.glossary,
+                    sections: r.lesson.sections.map((s) => ({
+                      ...s,
+                      body: s.body.slice(0, 1800),
+                      example: s.example.slice(0, 700),
+                    })),
+                    comparison: r.lesson.comparison,
+                    practice: r.lesson.practice,
+                    caveats: r.lesson.caveats,
                   }
                 : null,
               personal_notes: r.notes.slice(0, 1000),

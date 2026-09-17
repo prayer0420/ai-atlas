@@ -25,6 +25,7 @@ import {
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { readingExcerpt } from "@/lib/reading";
 import type {
   FeedItem,
   Issue,
@@ -39,6 +40,9 @@ type Props = {
   api: Api;
   onLogin: () => void;
   onResource: (id: string) => void;
+  sourceId?: string | null;
+  onWiki: (id: string) => void;
+  onClearSource: () => void;
 };
 type Source = { id: string; name: string; kind: string; detail: string };
 const icons = { daily: CalendarDays, wiki: Network, obsidian: FolderSync };
@@ -206,13 +210,18 @@ function NewsCard({
             ))}
           </div>
         )}
-        {slide.kind === "hook" && (
-          <div className="news-orbit" aria-hidden="true">
-            <span>발견</span>
-            <ArrowRight />
-            <span>이해</span>
-            <ArrowRight />
-            <span>연결</span>
+        {slide.kind === "hook" && story.concepts.length > 0 && (
+          <div
+            className="news-concept-map"
+            role="group"
+            aria-label="이 소식의 핵심 개념"
+          >
+            <span className="news-concept-label">이 소식의 핵심 개념</span>
+            <div>
+              {story.concepts.slice(0, 4).map((c) => (
+                <span key={c}>{c}</span>
+              ))}
+            </div>
           </div>
         )}
       </div>
@@ -239,6 +248,9 @@ export function BrainPanel({
   api,
   onLogin,
   onResource,
+  sourceId,
+  onWiki,
+  onClearSource,
 }: Props) {
   const [data, setData] = useState<any>(null),
     [loading, setLoading] = useState(false),
@@ -414,15 +426,23 @@ export function BrainPanel({
     issue?.content.stories.find((s) => s.feed_id === storyId) ||
     issue?.content.stories[0];
   const item = items.find((i) => i.id === story?.feed_id);
-  const selected = pages.find((p) => p.slug === selectedSlug) || pages[0];
+  const relevant = sourceId
+    ? pages.filter((p) => p.source_ids.includes(sourceId))
+    : pages;
+  const selected = relevant.find((p) => p.slug === selectedSlug) || relevant[0];
   const Icon = icons[view];
-  const filtered = pages.filter((p) =>
+  const filtered = relevant.filter((p) =>
     (p.title + " " + p.summary).toLowerCase().includes(search.toLowerCase()),
   );
   const chooseStory = (id: string) => {
     setStoryId(id);
     setSlide(0);
     setAnswer(false);
+  };
+  const openWikiPage = (slug: string) => {
+    if (sourceId && !relevant.some((p) => p.slug === slug)) onClearSource();
+    setSelectedSlug(slug);
+    setRevisions(null);
   };
   return (
     <section className="brain-panel">
@@ -465,7 +485,9 @@ export function BrainPanel({
               <button
                 className="primary-button"
                 disabled={!!busy}
-                onClick={() => void run("compile")}
+                onClick={() =>
+                  void run("compile", sourceId ? { sourceId } : {})
+                }
               >
                 {busy === "compile" ? (
                   <LoaderCircle className="spin" size={17} />
@@ -688,7 +710,7 @@ export function BrainPanel({
                   <div className="daily-reader">
                     <div className="daily-story-list">
                       <h2>오늘 읽을 {issue.content.stories.length}가지</h2>
-                      <p>{issue.content.introduction}</p>
+                      <p>한 가지씩 읽고, 필요할 때 깊이 들어가세요.</p>
                       {issue.content.stories.map((s, i) => (
                         <button
                           key={s.feed_id}
@@ -708,14 +730,6 @@ export function BrainPanel({
                           <ChevronRight size={18} />
                         </button>
                       ))}
-                      <div className="reading-principle">
-                        <Sparkles size={20} />
-                        <strong>발견 → 이해 → 연결</strong>
-                        <p>
-                          짧게 읽고, 한 가지를 떠올리고, 내 지식에 연결해
-                          보세요.
-                        </p>
-                      </div>
                     </div>
                     <div className="daily-card-area">
                       <div
@@ -752,6 +766,10 @@ export function BrainPanel({
                         </div>
                       </div>
                       <div className="card-controls">
+                        <span className="sr-only" aria-live="polite">
+                          {story.slides.length}장 중 {slide + 1}번째:{" "}
+                          {story.slides[slide]?.title}
+                        </span>
                         <button
                           className="icon-button"
                           aria-label="이전 카드"
@@ -790,8 +808,25 @@ export function BrainPanel({
                       </div>
                       <div className="daily-takeaway">
                         <strong>기억할 한 문장</strong>
-                        <p>{story.takeaway}</p>
+                        <p>{readingExcerpt(story.takeaway, 180)}</p>
                         <div className="brain-actions">
+                          <button
+                            className="primary-button"
+                            disabled={!!busy}
+                            onClick={async () => {
+                              if (item?.resource_id) onWiki(item.resource_id);
+                              else {
+                                const saved = await run("archive", {
+                                  id: story.feed_id,
+                                });
+                                if (saved?.resource_id)
+                                  onWiki(saved.resource_id);
+                              }
+                            }}
+                          >
+                            <Network size={17} />
+                            Wiki에서 깊이 읽기
+                          </button>
                           {item?.url && (
                             <a
                               href={item.url}
@@ -835,8 +870,8 @@ export function BrainPanel({
                           </button>
                         </div>
                       </div>
-                      <div className="daily-quiz">
-                        <span>30초 복습</span>
+                      <details className="daily-quiz" key={story.feed_id}>
+                        <summary>30초 복습 · 이해한 내용 확인하기</summary>
                         <h3>{story.quiz.question}</h3>
                         {answer ? (
                           <p>{story.quiz.answer}</p>
@@ -865,7 +900,7 @@ export function BrainPanel({
                             ? "학습 완료"
                             : "오늘 배운 내용으로 표시"}
                         </button>
-                      </div>
+                      </details>
                     </div>
                   </div>
                 </>
@@ -887,7 +922,8 @@ export function BrainPanel({
                 </div>
               )}
               {items.length > 0 && (
-                <section className="discovery-section">
+                <details className="discovery-section discovery-fold">
+                  <summary>더 살펴볼 소식 · {items.length}개 후보</summary>
                   <div className="brain-section-title">
                     <h2>더 살펴볼 발견</h2>
                     <span>
@@ -933,7 +969,7 @@ export function BrainPanel({
                       </article>
                     ))}
                   </div>
-                </section>
+                </details>
               )}
               {issue && (
                 <details className="source-report">
@@ -952,6 +988,26 @@ export function BrainPanel({
           )}
           {view === "wiki" && (
             <>
+              {sourceId && (
+                <section className="wiki-source-context">
+                  <BookOpen size={21} />
+                  <div>
+                    <strong>
+                      {data?.resources?.find(
+                        (r: { id: string; title: string }) => r.id === sourceId,
+                      )?.title || "선택한 자료"}
+                    </strong>
+                    <p>
+                      {relevant.length
+                        ? `이 자료와 연결된 Wiki ${relevant.length}개`
+                        : "연결된 Wiki가 아직 없습니다. 자료로 위키 정리를 실행하면 상세 지식을 연결합니다."}
+                    </p>
+                  </div>
+                  <button className="text-button" onClick={onClearSource}>
+                    전체 Wiki 보기
+                  </button>
+                </section>
+              )}
               <div className="wiki-stats">
                 <div>
                   <strong>{pages.length}</strong>
@@ -1025,7 +1081,7 @@ export function BrainPanel({
                 <KnowledgeGraph
                   pages={pages}
                   onSelect={(slug) => {
-                    setSelectedSlug(slug);
+                    openWikiPage(slug);
                     setWikiTab("pages");
                   }}
                 />
@@ -1059,7 +1115,7 @@ export function BrainPanel({
                     </div>
                   )}
                 </div>
-              ) : pages.length ? (
+              ) : relevant.length ? (
                 <div className="wiki-layout">
                   <aside className="wiki-index">
                     <label className="wiki-search">
@@ -1148,6 +1204,32 @@ export function BrainPanel({
                       </div>
                       <h2>{selected.title}</h2>
                       <p className="wiki-summary">{selected.summary}</p>
+                      <section
+                        className="wiki-reading-map"
+                        aria-label="이 문서의 지식 연결"
+                      >
+                        <span>
+                          근거 자료{" "}
+                          <strong>{selected.source_ids.length}개</strong>
+                        </span>
+                        <ArrowRight aria-hidden="true" />
+                        <span className="wiki-map-center">
+                          {selected.title}
+                        </span>
+                        {selected.links.length > 0 && (
+                          <>
+                            <ArrowRight aria-hidden="true" />
+                            <span>
+                              관련 개념{" "}
+                              <strong>{selected.links.length}개</strong>
+                            </span>
+                          </>
+                        )}
+                      </section>
+                      <div className="wiki-depth-heading">
+                        <BookOpen size={18} />
+                        <h3>상세 설명과 근거</h3>
+                      </div>
                       <div className="wiki-markdown">
                         <ReactMarkdown
                           remarkPlugins={[remarkGfm]}
@@ -1157,7 +1239,7 @@ export function BrainPanel({
                                 <button
                                   className="inline-wiki-link"
                                   onClick={() =>
-                                    setSelectedSlug(
+                                    openWikiPage(
                                       decodeURIComponent(href.slice(6)),
                                     )
                                   }
@@ -1203,10 +1285,7 @@ export function BrainPanel({
                       )}
                       <div className="wiki-related">
                         {selected.links.map((slug) => (
-                          <button
-                            key={slug}
-                            onClick={() => setSelectedSlug(slug)}
-                          >
+                          <button key={slug} onClick={() => openWikiPage(slug)}>
                             <GitBranch size={15} />
                             {pages.find((p) => p.slug === slug)?.title || slug}
                           </button>
@@ -1244,7 +1323,9 @@ export function BrainPanel({
                   <button
                     className="primary-button"
                     disabled={!!busy}
-                    onClick={() => void run("compile")}
+                    onClick={() =>
+                      void run("compile", sourceId ? { sourceId } : {})
+                    }
                   >
                     새 자료를 위키에 정리
                   </button>

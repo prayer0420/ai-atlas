@@ -135,7 +135,11 @@ export async function POST(req: NextRequest) {
         action === "ask"
           ? z.string().trim().min(3).max(1500).parse(input.question)
           : undefined;
-      return NextResponse.json(await compileWiki(user.id, question));
+      const sourceId =
+        action === "compile"
+          ? uuid.optional().parse(input.sourceId)
+          : undefined;
+      return NextResponse.json(await compileWiki(user.id, question, sourceId));
     }
     if (action === "preferences") {
       const values = z

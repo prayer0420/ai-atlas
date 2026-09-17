@@ -80,6 +80,8 @@ export const lessonSchema = z.object({
 });
 export type Lesson = z.infer<typeof lessonSchema>;
 export type Resource = {
+  summary?: string;
+  visual?: Lesson["diagram"] | null;
   id: string;
   user_id?: string;
   title: string;
