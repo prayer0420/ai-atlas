@@ -170,9 +170,16 @@ export async function runDaily(userId: string) {
       count: r.items.length,
       ...(r.error ? { error: r.error } : {}),
     }));
-    const rows = results.flatMap((r) =>
-      r.items.map((item) => ({ ...item, user_id: userId })),
-    );
+    const rows = [
+      ...new Map(
+        results.flatMap((r) =>
+          r.items.map(
+            (item) =>
+              [item.canonical_url, { ...item, user_id: userId }] as const,
+          ),
+        ),
+      ).values(),
+    ];
     if (rows.length)
       checkDb(
         (

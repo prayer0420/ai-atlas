@@ -351,10 +351,40 @@ export function BrainPanel({
   };
   const saveCard = async () => {
     if (!exportCard.current) return;
+    let restoreContent: (() => void) | undefined;
     setBusy("image");
     setError("");
     try {
       await document.fonts.ready;
+      const card = exportCard.current.querySelector<HTMLElement>(".news-card");
+      const content = card?.querySelector<HTMLElement>(".news-card-content");
+      const top = card?.querySelector<HTMLElement>(".news-card-top");
+      const footer = card?.querySelector<HTMLElement>(".news-card-footer");
+      if (card && content && top && footer) {
+        const styles = getComputedStyle(card);
+        const available =
+          card.clientHeight -
+          parseFloat(styles.paddingTop) -
+          parseFloat(styles.paddingBottom) -
+          top.offsetHeight -
+          footer.offsetHeight;
+        const natural = content.scrollHeight;
+        if (natural > available && available > 0) {
+          const previousStyle = content.getAttribute("style");
+          const scale = available / natural;
+          Object.assign(content.style, {
+            flex: "none",
+            height: natural + "px",
+            transform: `scale(${scale})`,
+            transformOrigin: "center top",
+            marginBottom: available - natural + "px",
+          });
+          restoreContent = () =>
+            previousStyle === null
+              ? content.removeAttribute("style")
+              : content.setAttribute("style", previousStyle);
+        }
+      }
       const { toPng } = await import("html-to-image");
       const url = await toPng(exportCard.current, {
         pixelRatio: 2,
@@ -372,6 +402,7 @@ export function BrainPanel({
     } catch {
       setError("이미지를 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.");
     } finally {
+      restoreContent?.();
       setBusy("");
     }
   };
