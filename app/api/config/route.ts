@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { admin, credentials, dailyLimit } from "@/lib/server";
+import { aiConfigured } from "@/lib/ai-config";
 export const dynamic = "force-dynamic";
 export async function GET() {
   const c = credentials();
@@ -18,7 +19,7 @@ export async function GET() {
       supabaseUrl: c.url,
       supabaseAnonKey: c.anon,
       database,
-      ai: !!process.env.OPENAI_API_KEY,
+      ai: aiConfigured(),
       model: process.env.OPENAI_MODEL || "gpt-5-mini",
       dailyLimit: dailyLimit(),
     },

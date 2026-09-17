@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import { aiConfigured } from "./ai-config";
 export class AppError extends Error {
   constructor(
     message: string,
@@ -94,7 +95,7 @@ export function ensureAIAllowed(email?: string) {
       "이 계정은 AI 분석이 허용되지 않았습니다. 운영자의 허용 계정 설정을 확인해 주세요.",
       403,
     );
-  if (!process.env.OPENAI_API_KEY)
+  if (!aiConfigured())
     throw new AppError(
       "AI API 키가 아직 연결되지 않았습니다. 원문은 저장되어 있으며, 연결 후 분석할 수 있습니다.",
       503,

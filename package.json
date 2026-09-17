@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "2.116.0",
+    "@vercel/oidc": "^3.8.8",
     "cheerio": "1.1.2",
     "html-to-image": "1.11.13",
     "lucide-react": "1.47.0",

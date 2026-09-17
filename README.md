@@ -16,7 +16,7 @@
 
 ## 현재 상태
 
-2026-09-18: 소스 구현과 로컬 개발 서버 준비 완료. 프로덕션 빌드, 타입 검사, PostgreSQL 기반 RLS·할당량 테스트 통과. 클라우드 테이블 적용, 실제 OpenAI 분석, Vercel 프로덕션 배포는 관리자 연결과 API 키 확인 후 진행해야 합니다. 완료되지 않은 외부 연결을 시연 데이터로 대체해 성공 처리하지 않습니다.
+2026-09-18: 소스 구현, 프로덕션 빌드, 타입 검사, PostgreSQL 기반 RLS·할당량 테스트 완료. Supabase 클라우드에 전용 테이블과 접근 정책 적용 완료. Vercel 배포 및 실제 AI 분석 검증 진행 중입니다.
 
 로그인 전 보이는 자료는 **체험용으로 미리 작성한 예시**입니다. 실제 저장된 사용자 자료나 실시간 AI 분석 결과가 아닙니다.
 
@@ -40,12 +40,15 @@ npm run dev
 | SUPABASE_URL              | 기존 프로젝트의 Supabase 주소                               |
 | SUPABASE_ANON_KEY         | 브라우저 로그인에 사용되는 공개 키                          |
 | SUPABASE_SERVICE_ROLE_KEY | 서버 전용 분석 작업 저장·할당량 관리                        |
-| OPENAI_API_KEY            | 서버 전용 AI API 키                                         |
+| OPENAI_API_KEY            | 선택: 직접 OpenAI 연결에 쓰는 서버 전용 API 키              |
+| AI_GATEWAY_API_KEY        | 선택: Vercel AI Gateway 키. Vercel 배포에서는 OIDC 사용 가능 |
 | OPENAI_MODEL              | 기본 `gpt-5-mini`, 구조화된 출력 지원 모델                  |
 | ALLOWED_EMAILS            | AI 분석을 허용할 이메일, 쉼표로 구분. 비어 있으면 분석 거부 |
 | DAILY_ANALYSIS_LIMIT      | 사용자별 한국 시간 기준 하루 분석 시도 제한, 기본 20회      |
 
 브라우저에 전달되는 값은 Supabase 주소와 공개 키뿐입니다. 서비스 역할 키나 AI 키에는 `NEXT_PUBLIC_` 접두사를 붙이지 마세요.
+
+AI 연결은 OpenAI 키 → AI Gateway 키 → Vercel이 요청에 제공하는 OIDC 토큰 순서로 선택합니다. OIDC는 Vercel 서버의 신원을 확인하는 짧은 수명의 토큰이며, 별도 AI 키 없이 Gateway를 이용하게 해 줍니다. 실제 분석에는 해당 계정의 사용 가능한 Gateway 크레딧이 필요합니다. 자동 결제나 크레딧 구매는 하지 않습니다.
 
 ## Supabase 적용
 
@@ -91,7 +94,7 @@ node --env-file=.env.local scripts/check.mjs
 
 - Instagram·Threads는 링크와 본문을 함께 넣어야 합니다. 로그인 제한을 우회하거나 비공개 게시물을 수집하지 않습니다.
 - YouTube 자막 자동 수집은 비공식 공개 자막 인터페이스에 의존하며, 영상·지역·서버 IP 등에 따라 실패할 수 있습니다. 실패 시 자막을 직접 붙여넣습니다. 영상 이미지나 오디오 자체를 분석한 것으로 표현하지 않습니다.
-- AI 키·사용 가능한 크레딧이 필요합니다. ChatGPT 로그인만으로 API 분석이 되는 것은 아닙니다.
+- 직접 OpenAI 키 또는 Vercel AI Gateway 연결과 사용 가능한 크레딧이 필요합니다. ChatGPT 로그인만으로 API 분석이 되는 것은 아닙니다.
 - 분석이 비정상 종료되어 상태가 남으면 6분 뒤 다시 시도할 수 있습니다. 원문과 개인 메모는 보존합니다. 재분석은 이전 노트를 교체합니다.
 - 분석 요청이 모델에 전달되기 전에도 수집 실패 등으로 일일 시도 횟수를 사용할 수 있습니다. API 요금과 일일 횟수 제한은 별개입니다.
 - 개념도는 모델이 구성한 텍스트를 읽기 쉬운 도표로 렌더링합니다. 외부 이미지 생성 API를 호출하지 않습니다.
@@ -103,4 +106,6 @@ node --env-file=.env.local scripts/check.mjs
 - [Supabase Data API 접근 보호](https://supabase.com/docs/guides/api/securing-your-api)
 - [Supabase 관리 API SQL 실행](https://supabase.com/docs/reference/api/v1-run-a-query)
 - [Vercel 환경변수](https://vercel.com/docs/environment-variables)
+- [Vercel AI Gateway OIDC 인증](https://vercel.com/docs/ai-gateway/authentication-and-byok/oidc)
+- [Vercel AI Gateway Responses API](https://vercel.com/docs/ai-gateway/sdks-and-apis/openresponses)
 - [YouTube transcript 라이브러리 원본](https://github.com/Kakulukian/youtube-transcript)
