@@ -738,6 +738,8 @@ export function BrainPanel({
                         role="group"
                         aria-label="카드뉴스. 좌우 방향키로 이동"
                         onKeyDown={(e) => {
+                          if (e.key === "ArrowRight" || e.key === "ArrowLeft")
+                            e.preventDefault();
                           if (e.key === "ArrowRight")
                             setSlide((n) =>
                               Math.min(story.slides.length - 1, n + 1),

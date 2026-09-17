@@ -633,7 +633,7 @@ export function Workspace() {
               busy={busy}
               onTrash={trash}
               onWiki={() => {
-                const id = selected.id;
+                const id = selected.demo ? null : selected.id;
                 navigate("wiki");
                 setWikiSource(id);
               }}
