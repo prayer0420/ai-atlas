@@ -126,15 +126,30 @@ export async function POST(
   } catch (e) {
     let problem = e;
     if (!(e instanceof AppError)) {
-      const candidate = e as { status?: number; name?: string };
+      const candidate = e as {
+        status?: number;
+        name?: string;
+        code?: string;
+        message?: string;
+      };
+      console.error("AI provider request failed", {
+        name: candidate.name,
+        status: candidate.status,
+        code: candidate.code,
+        detail: candidate.message
+          ?.slice(0, 800)
+          .replace(/(?:sk-[\w-]+|eyJ[\w.-]{50,})/g, "[redacted]"),
+      });
       problem = new AppError(
         candidate.status === 429
           ? "AI 서비스의 사용 한도에 도달했습니다. 잠시 후 다시 시도해 주세요."
           : candidate.status === 401
             ? "AI API 인증에 실패했습니다. 서버의 API 키를 확인해 주세요."
-            : candidate.name?.includes("Timeout")
-              ? "분석 시간이 초과되었습니다. 본문을 나누어 다시 시도해 주세요."
-              : "분석을 완료하지 못했습니다. 원문은 보존되어 있으니 다시 시도해 주세요.",
+            : candidate.status === 402
+              ? "AI 서비스의 사용 가능한 크레딧이 없습니다. 원문은 저장되어 있으며, 크레딧 연결 후 다시 분석할 수 있습니다."
+              : candidate.name?.includes("Timeout")
+                ? "분석 시간이 초과되었습니다. 본문을 나누어 다시 시도해 주세요."
+                : "분석을 완료하지 못했습니다. 원문은 보존되어 있으니 다시 시도해 주세요.",
         502,
       );
     }

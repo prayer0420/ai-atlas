@@ -35,16 +35,16 @@ npm run dev
 
 `.env.example`에 필요한 이름이 있습니다. 실제 값은 Git에서 제외된 `.env.local` 또는 Vercel의 서버 환경변수에만 저장합니다.
 
-| 이름                      | 용도                                                        |
-| ------------------------- | ----------------------------------------------------------- |
-| SUPABASE_URL              | 기존 프로젝트의 Supabase 주소                               |
-| SUPABASE_ANON_KEY         | 브라우저 로그인에 사용되는 공개 키                          |
-| SUPABASE_SERVICE_ROLE_KEY | 서버 전용 분석 작업 저장·할당량 관리                        |
-| OPENAI_API_KEY            | 선택: 직접 OpenAI 연결에 쓰는 서버 전용 API 키              |
+| 이름                      | 용도                                                         |
+| ------------------------- | ------------------------------------------------------------ |
+| SUPABASE_URL              | 기존 프로젝트의 Supabase 주소                                |
+| SUPABASE_ANON_KEY         | 브라우저 로그인에 사용되는 공개 키                           |
+| SUPABASE_SERVICE_ROLE_KEY | 서버 전용 분석 작업 저장·할당량 관리                         |
+| OPENAI_API_KEY            | 선택: 직접 OpenAI 연결에 쓰는 서버 전용 API 키               |
 | AI_GATEWAY_API_KEY        | 선택: Vercel AI Gateway 키. Vercel 배포에서는 OIDC 사용 가능 |
-| OPENAI_MODEL              | 기본 `gpt-5-mini`, 구조화된 출력 지원 모델                  |
-| ALLOWED_EMAILS            | AI 분석을 허용할 이메일, 쉼표로 구분. 비어 있으면 분석 거부 |
-| DAILY_ANALYSIS_LIMIT      | 사용자별 한국 시간 기준 하루 분석 시도 제한, 기본 20회      |
+| OPENAI_MODEL              | 기본 `gpt-5-mini`, 구조화된 출력 지원 모델                   |
+| ALLOWED_EMAILS            | AI 분석을 허용할 이메일, 쉼표로 구분. 비어 있으면 분석 거부  |
+| DAILY_ANALYSIS_LIMIT      | 사용자별 한국 시간 기준 하루 분석 시도 제한, 기본 20회       |
 
 브라우저에 전달되는 값은 Supabase 주소와 공개 키뿐입니다. 서비스 역할 키나 AI 키에는 `NEXT_PUBLIC_` 접두사를 붙이지 마세요.
 

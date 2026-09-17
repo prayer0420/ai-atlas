@@ -89,6 +89,7 @@ export function Workspace() {
   const [isSignup, setIsSignup] = useState(false);
   const [authMessage, setAuthMessage] = useState("");
   const [authBusy, setAuthBusy] = useState(false);
+  const [useEmailLink, setUseEmailLink] = useState(true);
   const [addType, setAddType] = useState("link");
   const [addUrl, setAddUrl] = useState("");
   const [addText, setAddText] = useState("");
@@ -344,8 +345,22 @@ export function Workspace() {
       password: String(form.get("password")),
     };
     try {
+      if (useEmailLink) {
+        const { error } = await client.auth.signInWithOtp({
+          email: creds.email,
+          options: { emailRedirectTo: window.location.origin },
+        });
+        if (error) throw error;
+        setAuthMessage(
+          "로그인 링크를 보냈습니다. 이메일의 링크를 누르면 자료실이 열립니다. 메일이 없다면 스팸함도 확인해 주세요.",
+        );
+        return;
+      }
       const { data, error } = isSignup
-        ? await client.auth.signUp(creds)
+        ? await client.auth.signUp({
+            ...creds,
+            options: { emailRedirectTo: window.location.origin },
+          })
         : await client.auth.signInWithPassword(creds);
       if (error) throw error;
       if (data.session) {
@@ -1014,7 +1029,13 @@ export function Workspace() {
               <span className="modal-symbol">
                 <BookOpen size={25} />
               </span>
-              <h2>{isSignup ? "나만의 자료실 만들기" : "다시 오셨군요"}</h2>
+              <h2>
+                {useEmailLink
+                  ? "이메일로 자료실 열기"
+                  : isSignup
+                    ? "나만의 자료실 만들기"
+                    : "다시 오셨군요"}
+              </h2>
               <p>모아둔 자료와 학습 노트를 어디서든 이어서 보세요.</p>
               <form onSubmit={auth}>
                 <label htmlFor="email">이메일</label>
@@ -1026,16 +1047,22 @@ export function Workspace() {
                   required
                   placeholder="name@example.com"
                 />
-                <label htmlFor="password">비밀번호</label>
-                <input
-                  id="password"
-                  name="password"
-                  type="password"
-                  autoComplete={isSignup ? "new-password" : "current-password"}
-                  minLength={8}
-                  required
-                  placeholder="8자 이상 입력"
-                />
+                {!useEmailLink && (
+                  <>
+                    <label htmlFor="password">비밀번호</label>
+                    <input
+                      id="password"
+                      name="password"
+                      type="password"
+                      autoComplete={
+                        isSignup ? "new-password" : "current-password"
+                      }
+                      minLength={8}
+                      required
+                      placeholder="8자 이상 입력"
+                    />
+                  </>
+                )}
                 {authMessage && (
                   <div className="notice" role="status">
                     {authMessage}
@@ -1050,20 +1077,37 @@ export function Workspace() {
                   ) : (
                     <LogIn size={18} />
                   )}{" "}
-                  {isSignup ? "가입하기" : "로그인"}
+                  {useEmailLink
+                    ? "이메일로 로그인 링크 받기"
+                    : isSignup
+                      ? "가입하기"
+                      : "로그인"}
                 </button>
               </form>
               <button
                 className="auth-switch text-button"
                 onClick={() => {
-                  setIsSignup(!isSignup);
+                  setUseEmailLink(!useEmailLink);
                   setAuthMessage("");
                 }}
               >
-                {isSignup
-                  ? "이미 계정이 있어요 · 로그인"
-                  : "처음이신가요? · 회원가입"}
+                {useEmailLink
+                  ? "비밀번호로 로그인하기"
+                  : "이메일 링크로 로그인하기"}
               </button>
+              {!useEmailLink && (
+                <button
+                  className="auth-switch text-button"
+                  onClick={() => {
+                    setIsSignup(!isSignup);
+                    setAuthMessage("");
+                  }}
+                >
+                  {isSignup
+                    ? "이미 계정이 있어요 · 로그인"
+                    : "처음이신가요? · 회원가입"}
+                </button>
+              )}
               {!config?.database && (
                 <p className="small-copy">
                   저장소 연결 작업이 완료되면 내 자료실을 이용할 수 있어요.
