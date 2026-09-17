@@ -10,11 +10,13 @@
     "test": "tsx --test tests/*.test.ts"
   },
   "dependencies": {
+    "@mozilla/readability": "0.6.0",
     "@supabase/supabase-js": "2.116.0",
     "@vercel/oidc": "^3.8.8",
     "cheerio": "1.1.2",
     "fflate": "0.8.3",
     "html-to-image": "1.11.13",
+    "linkedom": "0.18.13",
     "lucide-react": "1.47.0",
     "next": "16.3.5",
     "openai": "7.17.0",

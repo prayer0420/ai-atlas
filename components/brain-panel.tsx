@@ -234,7 +234,7 @@ function NewsCard({
           {date}
           <small>
             {mode === "ai"
-              ? "공개 요약 기반 · AI 재구성"
+              ? "공개 출처 기반 · AI 재구성"
               : "AI 분석 전 · 수집 자료"}
           </small>
         </span>
@@ -302,6 +302,13 @@ export function BrainPanel({
       generation.current++;
     };
   }, [load]);
+  useEffect(() => {
+    if (!signedIn || busy || showSettings) return;
+    const timer = setInterval(() => {
+      if (document.visibilityState === "visible") void load();
+    }, 30000);
+    return () => clearInterval(timer);
+  }, [signedIn, busy, showSettings, load]);
   const run = async (action: string, extra: Record<string, unknown> = {}) => {
     if (busy) return;
     setBusy(action);

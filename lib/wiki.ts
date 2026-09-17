@@ -4,6 +4,7 @@ import { aiConfigured } from "./ai-config";
 import { structured, claimTask, aiProblem } from "./brain-ai";
 import { wikiBundleSchema, type WikiPage } from "./brain-types";
 import type { Resource } from "./types";
+import { enqueue, queueLocally, localRuntime } from "./automation";
 export function wikiLint(
   pages: WikiPage[],
   resources: { id: string; updated_at: string }[],
@@ -50,6 +51,11 @@ export async function compileWiki(
   question?: string,
   sourceId?: string,
 ) {
+  if (queueLocally())
+    return enqueue(userId, question ? "question" : "wiki", {
+      question,
+      sourceId,
+    });
   if (!aiConfigured())
     throw new AppError(
       "AI 서비스 연결 후 위키를 작성할 수 있습니다. 원문은 이미 저장되어 있습니다.",
@@ -134,7 +140,7 @@ export async function compileWiki(
     );
   const chosen = (
     sourceId ? candidates.filter((r) => r.id === sourceId) : candidates
-  ).slice(0, 12);
+  ).slice(0, localRuntime() ? 3 : 12);
   if (!chosen.length)
     return { written: 0, message: "현재 자료가 위키에 반영되어 있습니다." };
   const sourceResult = await db
@@ -286,6 +292,7 @@ export async function compileWiki(
     );
     return {
       written: write.data,
+      remaining: Math.max(0, candidates.length - chosen.length),
       slugs: prepared.map((p) => p.slug),
       message: write.data + "개 문서를 위키에 반영했습니다.",
     };

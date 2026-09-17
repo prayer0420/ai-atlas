@@ -42,7 +42,10 @@ export async function cron(req: NextRequest, kind: "daily" | "wiki") {
       }
       break;
     }
-    return NextResponse.json({ kind, results });
+    return NextResponse.json(
+      { kind, results },
+      { status: results.some((r) => !r.ok) ? 503 : 200 },
+    );
   } catch (e) {
     return errorResponse(e);
   }

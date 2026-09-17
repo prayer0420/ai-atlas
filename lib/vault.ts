@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import type { Resource } from "./types";
 import type { FeedItem, Issue, WikiPage } from "./brain-types";
+import { cardSvg } from "./card-image";
 export function safeNoteName(value: string) {
   const name = value
     .normalize("NFC")
@@ -197,6 +198,17 @@ export function buildVault(input: VaultInput) {
       "\n";
   }
   for (const issue of input.issues) {
+    for (const story of issue.content.stories)
+      story.slides.forEach((_, i) => {
+        files[`cards/${issue.issue_date}-${story.feed_id}-${i + 1}.svg`] =
+          cardSvg(
+            story,
+            i,
+            input.items.find((item) => item.id === story.feed_id),
+            issue.issue_date,
+            issue.mode,
+          );
+      });
     files["daily/" + issue.issue_date + ".md"] =
       meta({ type: "daily-brief", date: issue.issue_date, mode: issue.mode }) +
       "# " +
@@ -216,9 +228,10 @@ export function buildVault(input: VaultInput) {
             "\n\n" +
             s.slides
               .map(
-                (c) =>
+                (c, i) =>
                   "### " +
                   c.title +
+                  `\n\n![[cards/${issue.issue_date}-${s.feed_id}-${i + 1}.svg]]` +
                   "\n\n" +
                   c.body +
                   "\n\n" +

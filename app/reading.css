@@ -680,3 +680,63 @@ body .sidebar small {
 body .news-compare .news-bullets > div:last-child:nth-child(odd) {
   grid-column: 1 / -1;
 }
+/* Operational detail stays collapsed so the learning content remains first. */
+.automation-status {
+  margin: 0 0 24px;
+  border: 1px solid #cbd5c8;
+  border-radius: 14px;
+  background: #f6f9f3;
+  color: #243829;
+}
+.automation-status summary {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 15px 18px;
+  min-height: 52px;
+  cursor: pointer;
+  font-size: 14px;
+}
+.automation-status summary > span {
+  color: #52644f;
+  margin-left: auto;
+  font-size: 13px;
+}
+.automation-details {
+  border-top: 1px solid #dbe2d6;
+  padding: 18px;
+  font-size: 14px;
+  line-height: 1.7;
+}
+.automation-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 24px;
+  margin: 12px 0;
+  color: #3b523e;
+}
+.automation-details ul {
+  list-style: none;
+  padding: 0;
+  margin: 12px 0;
+  max-height: 330px;
+  overflow: auto;
+}
+.automation-details li {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 0;
+  border-bottom: 1px solid #dce3d8;
+}
+.automation-details li svg {
+  vertical-align: middle;
+  margin-right: 6px;
+}
+.automation-details small {
+  display: block;
+  max-width: 65ch;
+  color: #76512d;
+}

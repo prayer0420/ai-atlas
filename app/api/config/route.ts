@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { admin, credentials, dailyLimit } from "@/lib/server";
 import { aiConfigured } from "@/lib/ai-config";
+import { localMode } from "@/lib/automation";
+import { localModel } from "@/lib/local-ai";
 export const dynamic = "force-dynamic";
 export async function GET() {
   const c = credentials();
@@ -20,7 +22,10 @@ export async function GET() {
       supabaseAnonKey: c.anon,
       database,
       ai: aiConfigured(),
-      model: process.env.OPENAI_MODEL || "gpt-5-mini",
+      aiMode: localMode() ? "local" : "cloud",
+      model: localMode()
+        ? localModel()
+        : process.env.OPENAI_MODEL || "gpt-5-mini",
       dailyLimit: dailyLimit(),
     },
     { headers: { "Cache-Control": "no-store" } },

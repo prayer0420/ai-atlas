@@ -8,7 +8,7 @@
 - 7개 분야별 탐색, 제목·본문·태그·메모 검색, 출처 필터, 정렬, 페이지 이동
 - 즐겨찾기, 학습 완료, 제목·분류·태그 수정, 메모, 휴지통·복원
 - 공개 웹 본문 추출, 공개 YouTube 자막 수집 시도, 수집 실패 시 본문 추가 안내
-- OpenAI의 구조화된 응답으로 학습 목표·요약·상세 설명·개념도·비교표·용어·실습·복습 문제 작성
+- 기본 Ollama 로컬 AI의 구조화된 응답으로 학습 목표·요약·상세 설명·개념도·비교표·용어·실습·복습 문제 작성
 - 원문 기반 설명과 보충 설명 구분, 주의사항과 출처 유지
 - 개념도 PNG 저장, 학습 노트 Markdown 내보내기
 - Supabase 이메일 링크 로그인·이메일/비밀번호 인증, 사용자별 RLS 정책, 일일 분석 제한과 중복 실행 방지
@@ -16,7 +16,7 @@
 
 ## 현재 상태
 
-2026-09-18: [프로덕션 서비스](https://ai-atlas-two.vercel.app) 배포 완료. Supabase 클라우드에 전용 테이블과 접근 정책 적용 완료. 실제 서비스에서 인증된 저장·중복 확인·메모 검색·휴지통 복원, 익명 접근 차단, 서버 비밀키 미노출 검증 완료. Vercel AI Gateway가 카드 등록 필요(403)를 반환해 실제 AI 생성 검증은 활성화 대기 중입니다.
+2026-09-18: [프로덕션 서비스](https://ai-atlas-two.vercel.app). Supabase 전용 테이블·접근 정책, 일일 자료 수집·카드뉴스·LLM Wiki·Obsidian 연결. Gateway 결제 설정 의존성을 제거하고 기본 실행 경로를 무료 로컬 AI로 변경했습니다. 상세 구성·도구 비교·운영 범위는 [무료 자동화 운영 안내](./docs/AUTOMATION.md)를 확인하세요.
 
 - Vercel 프로젝트: `ai-atlas` / `prayer-s-projects12`
 - Supabase: `DC_proj`의 `ai_atlas_*` 전용 테이블
@@ -35,7 +35,7 @@ npm install
 npm run dev
 ```
 
-기본 로컬 주소는 `http://127.0.0.1:3210`입니다. 브라우저 → 로컬 Next.js 서버 3210 → Supabase/OpenAI HTTPS 443 방향으로 통신합니다. 로컬 서버는 외부 네트워크에 노출하지 않습니다.
+기본 로컬 주소는 `http://127.0.0.1:3210`입니다. 브라우저 → Next.js → Supabase HTTPS 443, PC 작업기 → Supabase HTTPS 443 및 Ollama localhost 11434 방향으로 통신합니다. 로컬 서버는 외부 네트워크에 노출하지 않습니다.
 
 ## 환경변수
 
@@ -54,7 +54,7 @@ npm run dev
 
 브라우저에 전달되는 값은 Supabase 주소와 공개 키뿐입니다. 서비스 역할 키나 AI 키에는 `NEXT_PUBLIC_` 접두사를 붙이지 마세요.
 
-AI 연결은 OpenAI 키 → AI Gateway 키 → Vercel이 요청에 제공하는 OIDC 토큰 순서로 선택합니다. OIDC는 Vercel 서버의 신원을 확인하는 짧은 수명의 토큰이며, 별도 AI 키 없이 Gateway를 이용하게 해 줍니다. 실제 분석에는 해당 계정의 사용 가능한 Gateway 크레딧이 필요합니다. 자동 결제나 크레딧 구매는 하지 않습니다.
+기본 `AI_PROVIDER=local`에서는 외부 AI API를 호출하지 않습니다. `AI_PROVIDER=cloud`를 명시적으로 설정할 때만 OpenAI 키 → AI Gateway 키 → Vercel OIDC 순서로 연결합니다. 클라우드 모델에는 별도 크레딧이 필요하며 무료 한도가 자동 보장되지 않습니다. 로컬 모드에서 유료 모드로 자동 전환하거나 크레딧을 구매하지 않습니다. 로컬 작업기는 `.local/worker.env`의 `OLLAMA_MODEL`, `ATLAS_VAULT_PATH`, `ATLAS_INBOX_PATH`를 사용합니다.
 
 ## Supabase 적용
 

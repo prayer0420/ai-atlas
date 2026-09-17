@@ -50,6 +50,7 @@ import { Cover } from "./diagram";
 import { LessonView } from "./lesson-view";
 import { readingExcerpt } from "@/lib/reading";
 import dynamic from "next/dynamic";
+import { AutomationStatus } from "./automation-status";
 const BrainPanel = dynamic(() =>
   import("./brain-panel").then((module) => module.BrainPanel),
 );
@@ -118,6 +119,32 @@ export function Workspace() {
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(0);
   const isDemo = !session;
+  const captureHandled = useRef(false);
+  useEffect(() => {
+    if (!authReady || captureHandled.current) return;
+    const p = new URLSearchParams(window.location.search);
+    if (
+      !p.has("capture_url") &&
+      !p.has("capture_text") &&
+      !p.has("capture_title")
+    )
+      return;
+    if (!session) {
+      setDialog("auth");
+      return;
+    }
+    captureHandled.current = true;
+    const text = (p.get("capture_text") || "").slice(0, 60000);
+    const candidate =
+      p.get("capture_url") || text.match(/https?:\/\/[^\s<>]+/)?.[0] || "";
+    const url = /^https?:\/\//i.test(candidate) ? candidate.slice(0, 2048) : "";
+    setAddUrl(url);
+    setAddText(text === url ? "" : text);
+    setAddTitle((p.get("capture_title") || "").slice(0, 120));
+    setAddType(url ? "link" : "text");
+    setDialog("add");
+    window.history.replaceState(null, "", window.location.pathname);
+  }, [authReady, session]);
   const active = resources.filter((r) => !r.deleted_at);
   const notify = (s: string) => {
     setToast(s);
@@ -229,6 +256,23 @@ export function Workspace() {
     const timer = setInterval(load, 10000);
     return () => clearInterval(timer);
   }, [resources, session, load]);
+  const automationUpdated = useCallback(() => {
+    void load();
+  }, [load]);
+  useEffect(() => {
+    if (!selected || selected.demo) return;
+    const updated = resources.find((r) => r.id === selected.id);
+    if (!updated || updated.updated_at === selected.updated_at) return;
+    let live = true;
+    void api("/api/resources/" + selected.id)
+      .then((r) => {
+        if (live) setSelected(r.resource);
+      })
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [resources, selected, api]);
   function navigate(v: View, cat = "전체") {
     setWikiSource(null);
     setView(v);
@@ -300,9 +344,11 @@ export function Workspace() {
       setSelected(data.resource);
       await load();
       notify(
-        data.resource.status === "ready"
-          ? "새 학습 노트가 완성됐어요."
-          : "자료를 확인해 주세요.",
+        data.queued
+          ? data.message
+          : data.resource.status === "ready"
+            ? "새 학습 노트가 완성됐어요."
+            : "자료를 확인해 주세요.",
       );
     } catch (e) {
       await load();
@@ -610,6 +656,9 @@ export function Workspace() {
           </div>
         </header>
         <main id="main" tabIndex={-1}>
+          {session && config?.aiMode === "local" && (
+            <AutomationStatus api={api} onUpdated={automationUpdated} />
+          )}
           {error && (
             <div className="error-banner" role="alert">
               <AlertCircle size={18} />
@@ -723,7 +772,11 @@ export function Workspace() {
                     <span
                       className={`connection ${config?.ai ? "connected" : ""}`}
                     >
-                      {config?.ai ? "분석 API 설정됨" : "AI API 키 설정 필요"}
+                      {config?.aiMode === "local"
+                        ? "무료 로컬 AI · PC 연결 상태는 위에서 확인"
+                        : config?.ai
+                          ? "분석 API 설정됨"
+                          : "AI API 키 설정 필요"}
                     </span>
                     <p className="small-copy">
                       {config?.ai
@@ -732,6 +785,42 @@ export function Workspace() {
                       <br />
                       계정당 하루 최대 {config?.dailyLimit || 20}회 분석합니다.
                     </p>
+                  </section>
+                  <section className="setting-card full">
+                    <h2>읽던 페이지에서 바로 담기</h2>
+                    <p>
+                      휴대폰에서 홈페이지를 홈 화면에 추가하면 빠르게 열 수
+                      있습니다. 지원되는 Android 브라우저에서는 공유 메뉴의 AI
+                      Atlas로 링크를 보낼 수 있습니다.
+                    </p>
+                    <p className="small-copy">
+                      PC에서는 아래 수집 버튼 코드를 북마크의 주소에 붙여
+                      넣으세요. 웹 페이지에서 그 북마크를 누르면
+                      주소·제목·선택한 문장이 입력됩니다. 저장 전 내용을 확인할
+                      수 있습니다.
+                    </p>
+                    <button
+                      className="button secondary"
+                      onClick={async () => {
+                        try {
+                          const target = window.location.origin;
+                          const code =
+                            "javascript:(()=>{const p=new URLSearchParams({capture_url:location.href,capture_title:document.title,capture_text:String(window.getSelection()||'').slice(0,3000)});window.open(" +
+                            JSON.stringify(target + "/?") +
+                            "+p,'_blank','noopener,noreferrer')})()";
+                          await navigator.clipboard.writeText(code);
+                          notify(
+                            "북마크 주소에 넣을 수집 코드를 복사했습니다.",
+                          );
+                        } catch {
+                          setError(
+                            "클립보드에 복사하지 못했습니다. 링크와 본문을 자료 추가에 붙여 넣어 주세요.",
+                          );
+                        }
+                      }}
+                    >
+                      브라우저 수집 버튼 코드 복사
+                    </button>
                   </section>
                   <section className="setting-card full">
                     <h2>자료를 가져오는 방법</h2>

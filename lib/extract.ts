@@ -210,6 +210,23 @@ export async function extract(url: string) {
       method: "web",
     };
   const $ = cheerio.load(page.text);
+  // Readability extracts article text only; no scripts or linked resources run.
+  try {
+    const [{ Readability }, { parseHTML }] = await Promise.all([
+      import("@mozilla/readability"),
+      import("linkedom"),
+    ]);
+    const { document } = parseHTML(page.text);
+    const article = new Readability(document as unknown as Document).parse();
+    if (article?.textContent && article.textContent.trim().length >= 200)
+      return {
+        text: article.textContent.trim().slice(0, 60000),
+        title: (article.title || "웹 아티클").slice(0, 120),
+        method: "readability",
+      };
+  } catch {
+    /* Some publishers require the conservative HTML fallback below. */
+  }
   const title =
     $('meta[property="og:title"]').attr("content") || $("title").text();
   $("script,style,noscript,nav,header,footer,aside,form,iframe,svg").remove();

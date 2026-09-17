@@ -1,6 +1,8 @@
 import { getVercelOidcToken, getVercelOidcTokenSync } from "@vercel/oidc";
+import { localMode } from "./automation";
 
 export function aiConfigured() {
+  if (localMode()) return true;
   if (process.env.OPENAI_API_KEY || process.env.AI_GATEWAY_API_KEY) return true;
   try {
     return Boolean(getVercelOidcTokenSync());
@@ -10,6 +12,7 @@ export function aiConfigured() {
 }
 
 export async function aiConnection() {
+  if (localMode()) throw new Error("Cloud AI is disabled in local mode.");
   const requestedModel = process.env.OPENAI_MODEL || "gpt-5-mini";
   if (process.env.OPENAI_API_KEY) {
     return {

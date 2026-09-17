@@ -2,6 +2,8 @@ import OpenAI from "openai";
 import { zodTextFormat } from "openai/helpers/zod";
 import { z } from "zod";
 import { aiConnection } from "./ai-config";
+import { localMode, localRuntime } from "./automation";
+import { localStructured } from "./local-ai";
 import { admin, AppError, checkDb } from "./server";
 export function ensureOwner(email?: string) {
   if (
@@ -64,6 +66,20 @@ export async function structured<T extends z.ZodType>(
   input: unknown,
   maxTokens = 8000,
 ) {
+  if (localMode()) {
+    if (!localRuntime())
+      throw new AppError(
+        "PC에서 처리할 AI 작업입니다. 자동화 대기열을 확인해 주세요.",
+        503,
+      );
+    const concise =
+      name === "daily_cards"
+        ? " 각 소식은 카드 4장으로 구성하고 카드 본문은 80~120자, bullets는 최대 2개(각 40자 이내)로 간결하게 쓰세요. 소개와 퀴즈도 짧게 쓰세요."
+        : name === "knowledge_wiki"
+          ? " 일반 정리는 서로 연결된 문서 정확히 2개, 질문 답변은 정확히 1개를 작성하세요. 각 body는 800~1400자의 깊이 있는 설명으로 구성하고 summary는 한 문장으로 작성하세요."
+          : "";
+    return localStructured(schema, instructions + concise, input, maxTokens);
+  }
   const connection = await aiConnection();
   const client = new OpenAI({ ...connection, timeout: 160000, maxRetries: 0 });
   const response = await client.responses.parse({

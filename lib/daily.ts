@@ -8,7 +8,8 @@ import {
   diversified,
   kstDate,
 } from "./feeds";
-import { sourceType } from "./extract";
+import { sourceType, extract } from "./extract";
+import { enqueue, queueLocally, localRuntime } from "./automation";
 import {
   issueSchema,
   type FeedItem,
@@ -151,7 +152,34 @@ export async function runDaily(userId: string) {
   const db = admin(),
     prefs = await preferences(userId),
     date = kstDate();
-  const job = await claimTask(userId, "daily", date);
+  const collectionOnly = queueLocally();
+  if (collectionOnly) {
+    const existing = await db
+      .from("ai_atlas_issues")
+      .select("*")
+      .eq("user_id", userId)
+      .eq("issue_date", date)
+      .maybeSingle();
+    checkDb(existing.error);
+    if (existing.data) {
+      if (existing.data.mode === "ai")
+        return { issue: existing.data, cached: true };
+      return {
+        issue: existing.data,
+        ...(await enqueue(userId, "daily", {}, date)),
+      };
+    }
+  }
+  const job = collectionOnly
+    ? {
+        id: null,
+        status: "collecting",
+        result: null,
+        model: null,
+        input_tokens: 0,
+        output_tokens: 0,
+      }
+    : await claimTask(userId, "daily", localRuntime() ? date + ":local" : date);
   if (job.status === "completed") {
     const issue = await db
       .from("ai_atlas_issues")
@@ -227,7 +255,41 @@ export async function runDaily(userId: string) {
     let content = previewIssue(items),
       mode: "preview" | "ai" = "preview",
       warning: string | null = null;
-    if (aiConfigured())
+    const sourceTexts: Record<string, { text: string; method: string }> = {};
+    if (localRuntime())
+      for (const item of items) {
+        const id = await archiveFeed(userId, item.id);
+        const storedSource = await db
+          .from("ai_atlas_resources")
+          .select("raw_text,source_method,updated_at")
+          .eq("id", id)
+          .eq("user_id", userId)
+          .single();
+        checkDb(storedSource.error);
+        if (!storedSource.data) continue;
+        if (storedSource.data.source_method !== "feed_preview") {
+          sourceTexts[item.id] = {
+            text: storedSource.data.raw_text,
+            method: storedSource.data.source_method || "manual",
+          };
+        } else
+          try {
+            const article = await extract(item.url);
+            const savedArticle = await db
+              .from("ai_atlas_resources")
+              .update({ raw_text: article.text, source_method: article.method })
+              .eq("id", id)
+              .eq("user_id", userId)
+              .eq("updated_at", storedSource.data.updated_at)
+              .is("deleted_at", null)
+              .select("id");
+            checkDb(savedArticle.error);
+            if (savedArticle.data?.length) sourceTexts[item.id] = article;
+          } catch {
+            /* An unavailable article remains an honestly labelled RSS excerpt. */
+          }
+      }
+    if (aiConfigured() && !collectionOnly)
       try {
         const generated = job.result?.stories
           ? {
@@ -246,6 +308,8 @@ export async function runDaily(userId: string) {
                   feed_id: i.id,
                   title: i.title,
                   excerpt: i.excerpt,
+                  article: sourceTexts[i.id]?.text.slice(0, 6500) || null,
+                  source_method: sourceTexts[i.id]?.method || "feed_preview",
                   publisher: i.source_name,
                   published_at: i.published_at,
                   url: i.url,
@@ -267,25 +331,26 @@ export async function runDaily(userId: string) {
           );
         content = generated.value;
         mode = "ai";
-        checkDb(
-          (
-            await db
-              .from("ai_atlas_tasks")
-              .update({
-                result: content,
-                model: generated.model,
-                input_tokens: generated.input_tokens,
-                output_tokens: generated.output_tokens,
-              })
-              .eq("id", job.id)
-          ).error,
-        );
+        if (job.id)
+          checkDb(
+            (
+              await db
+                .from("ai_atlas_tasks")
+                .update({
+                  result: content,
+                  model: generated.model,
+                  input_tokens: generated.input_tokens,
+                  output_tokens: generated.output_tokens,
+                })
+                .eq("id", job.id)
+            ).error,
+          );
       } catch (e) {
         warning = aiProblem(e);
       }
     else
       warning =
-        "AI 연결 전에도 공개 자료 수집은 계속됩니다. 현재 카드는 원문 미리보기입니다.";
+        "자료를 수집했습니다. PC가 켜지면 무료 AI가 교육용 카드뉴스로 정리합니다. 현재는 원문 미리보기입니다.";
     for (const item of items) await archiveFeed(userId, item.id);
     const saved = await db
       .from("ai_atlas_issues")
@@ -304,28 +369,36 @@ export async function runDaily(userId: string) {
       .select("*")
       .single();
     checkDb(saved.error);
-    checkDb(
-      (
-        await db
-          .from("ai_atlas_tasks")
-          .update({
-            status: mode === "ai" ? "completed" : "failed",
-            error: warning,
-            finished_at: new Date().toISOString(),
-          })
-          .eq("id", job.id)
-      ).error,
-    );
+    if (job.id)
+      checkDb(
+        (
+          await db
+            .from("ai_atlas_tasks")
+            .update({
+              status: mode === "ai" ? "completed" : "failed",
+              error: warning,
+              finished_at: new Date().toISOString(),
+            })
+            .eq("id", job.id)
+        ).error,
+      );
+    if (collectionOnly)
+      return {
+        issue: saved.data,
+        collected: rows.length,
+        ...(await enqueue(userId, "daily", {}, date)),
+      };
     return { issue: saved.data, cached: false, collected: rows.length };
   } catch (e) {
-    await db
-      .from("ai_atlas_tasks")
-      .update({
-        status: "failed",
-        error: aiProblem(e),
-        finished_at: new Date().toISOString(),
-      })
-      .eq("id", job.id);
+    if (job.id)
+      await db
+        .from("ai_atlas_tasks")
+        .update({
+          status: "failed",
+          error: aiProblem(e),
+          finished_at: new Date().toISOString(),
+        })
+        .eq("id", job.id);
     throw e;
   }
 }

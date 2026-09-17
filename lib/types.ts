@@ -111,6 +111,7 @@ export const sourceNames: Record<Resource["source_type"], string> = {
   text: "텍스트",
 };
 export type AppConfig = {
+  aiMode?: "local" | "cloud";
   supabaseUrl: string;
   supabaseAnonKey: string;
   database: boolean;
