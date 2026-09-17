@@ -85,6 +85,17 @@ export async function compileWiki(userId: string, question?: string) {
             "있는",
             "그리고",
           ].includes(w),
+      )
+      .flatMap((word) =>
+        [
+          ...new Set([
+            word,
+            word.replace(
+              /(?:이란|이랑|에서|으로|하고|란|은|는|이|가|을|를|의|에|로|와|과|랑)$/u,
+              "",
+            ),
+          ]),
+        ].filter((w) => w.length > 1),
       );
     const score = (text: string) =>
       tokens.reduce((n, t) => n + (text.toLowerCase().includes(t) ? 1 : 0), 0);
