@@ -33,14 +33,17 @@ export function parseSocialPage(page: SocialPage) {
     scope = subtree(region, /- generic /);
   } else {
     const article = subtree(tree, /- article:/);
-    const scrollable = subtree(tree, /- generic .*\[scrollable\]/);
+    // Logged-in pages put the image carousel before a separate caption container.
+    const blocks = tree.split(/(?=\n[^\n]*- generic .*\[scrollable\])/);
+    const scrollable = blocks.map((block) => subtree(block, /- generic .*\[scrollable\]/))
+      .find((block) => /- text: "/.test(block)) || "";
     scope = scrollable || article;
     // Reply threads start after the comment-loading control in the observed desktop layout.
     scope = scope.split(/\n[^\n]*- button[^\n]*:\n\s+- img "(?:댓글 더 읽어들이기|Load more comments)"/)[0];
   }
   const texts = [...scope.matchAll(/- (?:text|heading[^:\n]*): "([^\n]*)"/g)]
     .map((m) => m[1]).filter((value) => value.length >= 60);
-  const body = texts.sort((a, b) => b.length - a.length)[0];
+  const body = platform === "instagram" ? texts[0] : texts.sort((a, b) => b.length - a.length)[0];
   if (!body || /(?:비밀번호|password).*(?:로그인|log in)/i.test(body)) {
     return { status: /로그인|log in|sign in/i.test(tree) ? "login_required" : "unreadable", url, platform };
   }
@@ -99,7 +102,25 @@ for(const link of links.slice(0,limit)){
       if(hasBody || /- textbox "(?:비밀번호|Password)"/.test(state.tree))break;
       await sleep(800);state=await snapshot(post);
     }
-    pages.push({url:post.url(),tree:state.tree});
+    let sourceUrl=post.url();
+    // Logged-in Threads redirects a permalink to an injected post in the home feed.
+    // Resolve the date link inside that first post, never attach the home URL to it.
+    if(platform==='threads' && new URL(sourceUrl).pathname==='/' && new URL(sourceUrl).searchParams.has('injected_media_ids')){
+      const lines=state.tree.split('\\n');
+      const region=lines.findIndex(line=>/- region "(?:칼럼 본문|Column body)"/.test(line));
+      const start=lines.findIndex((line,index)=>index>region && region>=0 && /- generic /.test(line));
+      if(start>=0){
+        const indent=lines[start].search(/\\S/);let end=start+1;
+        while(end<lines.length && lines[end].search(/\\S/)>indent)end++;
+        const first=lines.slice(start,end).join('\\n');
+        const dateRef=first.match(/- link "\\d{4}[^\\n]*?\\[ref=([^\\]]+)\\]/);
+        if(dateRef){
+          const href=await post.locator(dateRef[1]).getAttribute('href');
+          if(href)sourceUrl=new URL(href,'https://www.threads.com').href;
+        }
+      }
+    }
+    pages.push({url:sourceUrl,tree:state.tree});
   }catch{failures.push({platform,stage:'page_read_failed'});}
   finally{if(post)await closeTab(post);}
 }

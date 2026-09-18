@@ -25,6 +25,24 @@ test("login screens and search snippets never become saved evidence", () => {
   assert.equal(result.status, "login_required");
   assert.equal(result.item, undefined);
 });
+test("logged-in Instagram skips the image carousel and longer replies", () => {
+  const result = parseSocialPage({ url: "https://instagram.com/p/abc/", tree: `- main:\n  - generic [ref=e1] [scrollable]:\n    - list:\n      - listitem\n  - generic [ref=e2] [scrollable]:\n    - text: "${body}"\n    - text: "${"댓글입니다 ".repeat(60)}"` });
+  assert.equal(result.status, "read");
+  assert.ok(result.item?.text.includes(body));
+  assert.ok(!result.item?.text.includes("댓글입니다"));
+});
+test("Threads injected home view resolves only the first post permalink", async () => {
+  const tree = `- region "칼럼 본문" [ref=e1]:\n  - generic [ref=e2]:\n    - link "2026년 9월 18일" [ref=e3]\n    - text: "${body}"\n  - generic [ref=e4]:\n    - link "2026년 9월 18일" [ref=e5]\n    - text: "${body.repeat(2)}"`;
+  const output: string[] = [];
+  const page = { url: () => "https://www.threads.com/?injected_media_ids=123", locator: (ref: string) => ({ getAttribute: async () => { assert.equal(ref, "e3"); return "/@author/post/abc"; } }) };
+  const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
+  await new AsyncFunction("openTab", "closeTab", "snapshot", "sleep", "console", socialBrowserCode("threads", 1, "https://www.threads.com/@author/post/abc"))(
+    async () => page, async () => {}, async () => ({ tree }), async () => {}, { log: (line: string) => output.push(line) },
+  );
+  const result = JSON.parse(output[0].slice("ATLAS_SOCIAL_RESULT=".length));
+  assert.equal(result.pages[0].url, "https://www.threads.com/@author/post/abc");
+  assert.equal(parseSocialPage(result.pages[0]).item?.title, body.slice(0, 100));
+});
 test("browser code has valid JS and clamps per-platform work", () => {
   const code = socialBrowserCode("instagram", 100);
   assert.ok(code.includes("limit=3"));
