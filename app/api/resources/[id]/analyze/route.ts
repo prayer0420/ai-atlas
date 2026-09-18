@@ -31,12 +31,17 @@ export async function POST(
       return NextResponse.json(
         {
           resource: r.data,
-          ...(await enqueue(user.id, "analyze", { resourceId: id }, id)),
+          ...(await enqueue(
+            user.id,
+            "analyze",
+            { resourceId: id, manual: true },
+            id,
+          )),
         },
         { status: 202 },
       );
     }
-    return NextResponse.json(await analyzeResource(user.id, id));
+    return NextResponse.json(await analyzeResource(user.id, id, true));
   } catch (e) {
     return errorResponse(e);
   }

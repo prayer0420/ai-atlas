@@ -28,7 +28,7 @@ let current: {
   lease_token: string;
   user_id: string;
   kind: string;
-  payload: Record<string, string>;
+  payload: Record<string, unknown>;
   attempts: number;
 } | null = null;
 const log = (message: string) =>
@@ -180,7 +180,11 @@ async function tick() {
   try {
     let result: unknown;
     if (current.kind === "analyze")
-      result = await analyzeResource(ownerId, current.payload.resourceId);
+      result = await analyzeResource(
+        ownerId,
+        String(current.payload.resourceId),
+        current.payload.manual === true,
+      );
     else if (
       current.kind === "daily" &&
       current.payload.action === "manual-collect"
@@ -195,7 +199,7 @@ async function tick() {
         ? null
         : await collectAside(undefined, undefined, "youtube", true);
       const imported = process.env.ATLAS_INBOX_PATH
-        ? await importInbox(ownerId, process.env.ATLAS_INBOX_PATH)
+        ? await importInbox(ownerId, process.env.ATLAS_INBOX_PATH, true)
         : { imported: 0, errors: 0 };
       result = {
         mode: "manual",
@@ -229,8 +233,12 @@ async function tick() {
     } else
       result = await compileWiki(
         ownerId,
-        current.payload.question,
-        current.payload.sourceId,
+        typeof current.payload.question === "string"
+          ? current.payload.question
+          : undefined,
+        typeof current.payload.sourceId === "string"
+          ? current.payload.sourceId
+          : undefined,
       );
     checkDb(
       (
@@ -346,7 +354,7 @@ async function main() {
       );
     }
     if (!process.argv.includes("--watch")) break;
-    await pause(30000);
+    await pause(5000);
   } while (true);
   await fs.unlink(lockPath);
 }

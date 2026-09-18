@@ -25,7 +25,11 @@ export const captureSchema = z.object({
     .min(1)
     .max(20),
 });
-export async function importInbox(userId: string, directory: string) {
+export async function importInbox(
+  userId: string,
+  directory: string,
+  manualAnalysis = false,
+) {
   const root = path.resolve(directory);
   await fs.mkdir(root, { recursive: true });
   const db = admin();
@@ -100,7 +104,7 @@ export async function importInbox(userId: string, directory: string) {
           await enqueue(
             userId,
             "analyze",
-            { resourceId: existing.data.id },
+            { resourceId: existing.data.id, manual: manualAnalysis },
             existing.data.id,
           );
       }

@@ -27,6 +27,8 @@ export async function enqueue(
     queued: true,
     job_id: result.data,
     message:
-      "무료 AI 작업을 예약했습니다. 연결된 PC가 켜지면 자동으로 처리합니다.",
+      kind === "analyze" && payload.manual === true
+        ? "수동 자료를 최우선으로 학습하고 있습니다. 연결된 PC가 켜져 있으면 곧 완료됩니다."
+        : "무료 AI 작업을 예약했습니다. 연결된 PC가 켜지면 자동으로 처리합니다.",
   };
 }

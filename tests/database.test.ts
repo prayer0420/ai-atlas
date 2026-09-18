@@ -20,6 +20,24 @@ test("PostgreSQL migration: RLS isolation, soft delete, duplicates, quota and jo
       ),
     );
     await db.exec(
+      await readFile(
+        new URL(
+          "../supabase/migrations/202609180001_local_automation.sql",
+          import.meta.url,
+        ),
+        "utf8",
+      ),
+    );
+    await db.exec(
+      await readFile(
+        new URL(
+          "../supabase/migrations/20260918233654_manual_analysis_unlimited.sql",
+          import.meta.url,
+        ),
+        "utf8",
+      ),
+    );
+    await db.exec(
       `set role authenticated; set request.jwt.claim.sub='${alice}';`,
     );
     const inserted = await db.query<{ id: string }>(
@@ -98,6 +116,11 @@ test("PostgreSQL migration: RLS isolation, soft delete, duplicates, quota and jo
         db.query(`select public.ai_atlas_claim_analysis($1,$2,1)`, [id, alice]),
       /DAILY_LIMIT/,
     );
+    const manual = await db.query<{ job: string }>(
+      `select public.ai_atlas_claim_manual_analysis($1,$2) as job`,
+      [id, alice],
+    );
+    assert.ok(manual.rows[0].job);
     await db.exec(`reset role; set role anon;`);
     await assert.rejects(() =>
       db.query("select * from public.ai_atlas_resources"),

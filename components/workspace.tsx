@@ -417,7 +417,7 @@ export function Workspace() {
     setResources((items) =>
       items.map((x) => (x.id === id ? { ...x, status: "analyzing" } : x)),
     );
-    notify("분석을 시작했습니다. 완료까지 잠시 걸릴 수 있어요.");
+    notify("수동 자료를 바로 학습하기 시작했습니다.");
     try {
       const data = await api(`/api/resources/${id}/analyze`, {
         method: "POST",

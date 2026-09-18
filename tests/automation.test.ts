@@ -27,6 +27,7 @@ test("Local queue isolates users, deduplicates work, recovers expired leases, an
       "202609170001_ai_atlas.sql",
       "20260917154144_atlas_daily_wiki.sql",
       "202609180001_local_automation.sql",
+      "20260918233654_manual_analysis_unlimited.sql",
     ])
       await db.exec(
         await readFile(
@@ -109,6 +110,27 @@ test("Local queue isolates users, deduplicates work, recovers expired leases, an
       [alice, JSON.stringify({ action: "manual-collect", channel: "all" })],
     );
     assert.ok(collect.rows[0].id);
+    for (let i = 0; i < 65; i++)
+      await db.query(
+        `select ai_atlas_enqueue($1,'analyze',$2,$3)`,
+        [
+          alice,
+          `manual-${i}`,
+          JSON.stringify({
+            resourceId: "33333333-3333-4333-8333-333333333333",
+            manual: true,
+          }),
+        ],
+      );
+    assert.equal(
+      (
+        await db.query<{ count: number }>(
+          `select count(*)::int as count from ai_atlas_queue where user_id=$1 and kind='analyze'`,
+          [alice],
+        )
+      ).rows[0].count,
+      65,
+    );
   } finally {
     await db.close();
   }

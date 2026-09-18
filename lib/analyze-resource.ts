@@ -1,7 +1,7 @@
 import { admin, checkDb, AppError, dailyLimit } from "./server";
 import { extract } from "./extract";
 import { createLesson } from "./analyze";
-export async function analyzeResource(ownerId: string, id: string) {
+export async function analyzeResource(ownerId: string, id: string, manual = false) {
   let jobId: string | undefined;
   let resourceId: string | undefined;
   let userId: string | undefined;
@@ -19,10 +19,16 @@ export async function analyzeResource(ownerId: string, id: string) {
       .maybeSingle();
     checkDb(error);
     if (!r) throw new AppError("자료를 찾을 수 없습니다.", 404);
-    const { data: claim, error: claimError } = await admin().rpc(
-      "ai_atlas_claim_analysis",
-      { p_resource_id: id, p_user_id: user.id, p_limit: dailyLimit() },
-    );
+    const { data: claim, error: claimError } = manual
+      ? await admin().rpc("ai_atlas_claim_manual_analysis", {
+          p_resource_id: id,
+          p_user_id: user.id,
+        })
+      : await admin().rpc("ai_atlas_claim_analysis", {
+          p_resource_id: id,
+          p_user_id: user.id,
+          p_limit: dailyLimit(),
+        });
     if (claimError) {
       if (claimError.message.includes("DAILY_LIMIT"))
         throw new AppError(
