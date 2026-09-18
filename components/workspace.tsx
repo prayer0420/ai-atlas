@@ -57,6 +57,7 @@ import { readingExcerpt } from "@/lib/reading";
 import dynamic from "next/dynamic";
 import { AutomationStatus } from "./automation-status";
 import { ReadingDesk } from "./reading-desk";
+import { PasswordSettings } from "./password-settings";
 const BrainPanel = dynamic(() =>
   import("./brain-panel").then((module) => module.BrainPanel),
 );
@@ -110,10 +111,8 @@ export function Workspace() {
   const [toast, setToast] = useState("");
   const [error, setError] = useState("");
   const [dialog, setDialog] = useState<"add" | "auth" | null>(null);
-  const [isSignup, setIsSignup] = useState(false);
   const [authMessage, setAuthMessage] = useState("");
   const [authBusy, setAuthBusy] = useState(false);
-  const [useEmailLink, setUseEmailLink] = useState(true);
   const [addType, setAddType] = useState("link");
   const [addUrl, setAddUrl] = useState("");
   const [addText, setAddText] = useState("");
@@ -219,7 +218,7 @@ export function Workspace() {
             setSession(null);
             setDialog("auth");
             setAuthMessage(
-              "로그인 링크가 만료되었거나 이미 사용되었습니다. 새 로그인 링크를 받아 다시 시도해 주세요.",
+              "로그인 정보를 복원하지 못했습니다. 로그인 ID와 비밀번호로 다시 로그인해 주세요.",
             );
             if (callback)
               window.history.replaceState(
@@ -485,39 +484,23 @@ export function Workspace() {
     setAuthMessage("");
     const form = new FormData(e.currentTarget);
     const creds = {
-      email: String(form.get("email")),
+      email: String(form.get("email")).trim(),
       password: String(form.get("password")),
     };
     try {
-      if (useEmailLink) {
-        const { error } = await client.auth.signInWithOtp({
-          email: creds.email,
-          options: { emailRedirectTo: window.location.origin },
-        });
-        if (error) throw error;
-        setAuthMessage(
-          "로그인 링크를 보냈습니다. 이메일의 링크를 누르면 자료실이 열립니다. 메일이 없다면 스팸함도 확인해 주세요.",
-        );
-        return;
-      }
-      const { data, error } = isSignup
-        ? await client.auth.signUp({
-            ...creds,
-            options: { emailRedirectTo: window.location.origin },
-          })
-        : await client.auth.signInWithPassword(creds);
+      const { data, error } = await client.auth.signInWithPassword(creds);
       if (error) throw error;
       if (data.session) {
         setDialog(null);
         notify("내 자료실에 연결했습니다.");
-      } else setAuthMessage("가입 확인 메일을 확인한 뒤 로그인해 주세요.");
+      } else setAuthMessage("로그인하지 못했습니다. 잠시 후 다시 시도해 주세요.");
     } catch (e) {
       const msg = (e as Error).message;
       setAuthMessage(
         msg.includes("Invalid login")
           ? "이메일 또는 비밀번호를 확인해 주세요."
           : msg.includes("Email not confirmed")
-            ? "이메일 인증을 먼저 완료해 주세요."
+            ? "계정 설정 확인이 필요합니다. 운영자에게 문의해 주세요."
             : msg,
       );
     } finally {
@@ -587,6 +570,12 @@ export function Workspace() {
           wiki: "지식 위키",
           obsidian: "Obsidian · Second Brain",
         }[view];
+  if (!authReady) return (
+    <main className="loading-state" aria-busy="true" aria-live="polite">
+      <LoaderCircle className="spin" />
+      <p>내 자료실에 연결하고 있어요.</p>
+    </main>
+  );
   return (
     <div className="app-shell">
       <a className="skip-link" href="#main">
@@ -691,11 +680,7 @@ export function Workspace() {
             className="profile"
             onClick={
               session
-                ? async () => {
-                    await client?.auth.signOut();
-                    setSession(null);
-                    notify("로그아웃했습니다.");
-                  }
+                ? () => navigate("settings")
                 : requireAuth
             }
           >
@@ -829,6 +814,21 @@ export function Workspace() {
               </div>
               {view === "settings" ? (
                 <div className="settings-grid">
+                  {session && client && (
+                    <PasswordSettings key={session.user.id} client={client} email={session.user.email || ""} />
+                  )}
+                  {session && (
+                    <section className="setting-card full">
+                      <h2>로그인 상태</h2>
+                      <p>이 브라우저에서는 로그인 상태가 자동으로 유지됩니다.</p>
+                      <button className="secondary-button" onClick={async () => {
+                        const result = await client?.auth.signOut();
+                        if (result?.error) { notify("로그아웃하지 못했습니다. 다시 시도해 주세요."); return; }
+                        setSession(null);
+                        notify("로그아웃했습니다.");
+                      }}><LogOut size={17} /> 로그아웃</button>
+                    </section>
+                  )}
                   <section className="setting-card">
                     <div className="setting-icon">
                       <Layers />
@@ -1251,40 +1251,28 @@ export function Workspace() {
               <span className="modal-symbol">
                 <BookOpen size={25} />
               </span>
-              <h2>
-                {useEmailLink
-                  ? "이메일로 자료실 열기"
-                  : isSignup
-                    ? "나만의 자료실 만들기"
-                    : "다시 오셨군요"}
-              </h2>
-              <p>모아둔 자료와 학습 노트를 어디서든 이어서 보세요.</p>
+              <h2>내 자료실 로그인</h2>
+              <p>로그인 ID와 비밀번호로 바로 들어오세요. 이메일 인증은 필요하지 않습니다.</p>
               <form onSubmit={auth}>
-                <label htmlFor="email">이메일</label>
+                <label htmlFor="email">로그인 ID (기존 이메일)</label>
                 <input
                   id="email"
                   name="email"
                   type="email"
-                  autoComplete="email"
+                  autoComplete="username"
                   required
                   placeholder="name@example.com"
                 />
-                {!useEmailLink && (
-                  <>
                     <label htmlFor="password">비밀번호</label>
                     <input
                       id="password"
                       name="password"
                       type="password"
-                      autoComplete={
-                        isSignup ? "new-password" : "current-password"
-                      }
+                      autoComplete="current-password"
                       minLength={8}
                       required
                       placeholder="8자 이상 입력"
                     />
-                  </>
-                )}
                 {authMessage && (
                   <div className="notice" role="status">
                     {authMessage}
@@ -1299,37 +1287,10 @@ export function Workspace() {
                   ) : (
                     <LogIn size={18} />
                   )}{" "}
-                  {useEmailLink
-                    ? "이메일로 로그인 링크 받기"
-                    : isSignup
-                      ? "가입하기"
-                      : "로그인"}
+                  로그인
                 </button>
               </form>
-              <button
-                className="auth-switch text-button"
-                onClick={() => {
-                  setUseEmailLink(!useEmailLink);
-                  setAuthMessage("");
-                }}
-              >
-                {useEmailLink
-                  ? "비밀번호로 로그인하기"
-                  : "이메일 링크로 로그인하기"}
-              </button>
-              {!useEmailLink && (
-                <button
-                  className="auth-switch text-button"
-                  onClick={() => {
-                    setIsSignup(!isSignup);
-                    setAuthMessage("");
-                  }}
-                >
-                  {isSignup
-                    ? "이미 계정이 있어요 · 로그인"
-                    : "처음이신가요? · 회원가입"}
-                </button>
-              )}
+              <p className="small-copy">개인 전용 자료실입니다. 비밀번호를 아직 설정하지 않았다면 로그인된 기기의 연결 설정에서 설정해 주세요.</p>
               {!config?.database && (
                 <p className="small-copy">
                   저장소 연결 작업이 완료되면 내 자료실을 이용할 수 있어요.

@@ -1660,6 +1660,28 @@ tbody tr:last-child td {
 .setting-card.full {
   grid-column: 1/-1;
 }
+
+.password-settings-form {
+  display: grid;
+  gap: 12px;
+  max-width: 440px;
+  margin-top: 20px;
+}
+.password-settings-form label { font-size: 14px; }
+.password-settings-form input {
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid var(--border, #d8d3cb);
+  border-radius: 8px;
+  background: white;
+  color: #252525;
+  font: inherit;
+}
+.password-settings-form input:focus-visible {
+  outline: 2px solid #51664e;
+  outline-offset: 2px;
+}
 .support-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
