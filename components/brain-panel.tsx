@@ -1184,7 +1184,10 @@ export function BrainPanel({
                     <article className="wiki-document">
                       <div className="wiki-document-meta">
                         <span>
-                          지속적으로 쌓이는 지식 · v{selected.revision}
+                          {selected.protected
+                            ? "검토 완료 · 수정 보호"
+                            : "AI 초안 · 원문과 함께 확인"}{" "}
+                          · v{selected.revision}
                         </span>
                         <div>
                           <button

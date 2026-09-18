@@ -255,6 +255,20 @@ export async function compileWiki(
     ]);
     const prepared = drafts.map((p) => ({
       ...p,
+      caveats: [
+        "수집 자료를 바탕으로 만든 AI 초안입니다. 원문의 주장과 AI의 보충 설명을 독립적으로 검증한 결과는 아닙니다.",
+        ...p.caveats,
+        ...(sources.some(
+          (r) =>
+            p.source_ids.includes(r.id) &&
+            (r.source_method === "feed_preview" ||
+              r.raw_text.length > (localRuntime() ? 3000 : 5000)),
+        )
+          ? [
+              "일부 출처는 요약 또는 본문 발췌를 사용했습니다. 전체 맥락은 연결된 원문에서 확인하세요.",
+            ]
+          : []),
+      ].slice(0, 8),
       kind: question ? "question" : p.kind,
       body: p.body.replace(
         /\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g,
