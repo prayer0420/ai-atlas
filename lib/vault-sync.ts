@@ -68,6 +68,9 @@ export async function syncLocalVault(
         next[name] = desired;
         continue;
       }
+      // A generated title change must not rewrite a historical raw snapshot.
+      // It is a preserved snapshot, not a user-edit conflict.
+      if (name.startsWith("raw/") && previous[name] === actual) continue;
       if (
         name.startsWith("raw/") ||
         !previous[name] ||

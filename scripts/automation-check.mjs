@@ -62,7 +62,9 @@ try {
   );
   if (process.argv.includes("--enqueue")) {
     const resources = await api("/api/resources?q=RAG");
-    const resource = resources.resources[0];
+    const resource = resources.resources.find(
+      (r) => r.source_type === "text" && r.title.includes("RAG"),
+    );
     assert.ok(resource, "Existing RAG starter lesson required");
     const first = await api(`/api/resources/${resource.id}/analyze`, {});
     const again = await api(`/api/resources/${resource.id}/analyze`, {});

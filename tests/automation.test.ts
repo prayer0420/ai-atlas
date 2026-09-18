@@ -34,6 +34,13 @@ test("Local queue isolates users, deduplicates work, recovers expired leases, an
           "utf8",
         ),
       );
+    const matches = await db.query<{ value: string }>(
+      "select value from (values ('RAG는 근거를 검색합니다'),('paragraph'),('coverage'),('rag-fusion')) t(value) where value ~* '(^|[^a-z0-9])RAG([^a-z0-9]|$)'",
+    );
+    assert.deepEqual(
+      matches.rows.map((r) => r.value),
+      ["RAG는 근거를 검색합니다", "rag-fusion"],
+    );
     const id = async (user: string) =>
       (
         await db.query<{ id: string }>(
@@ -235,7 +242,8 @@ test("Automatic Obsidian sync updates generated files and preserves user edits a
       "personal/note.md": "replacement",
       "wiki/new.md": "new",
     });
-    assert.deepEqual(result, { written: 1, conflicts: 2 });
+    assert.deepEqual(result, { written: 1, conflicts: 1 });
+    assert.equal(await read(join(root, "raw/source.md"), "utf8"), "original");
     assert.equal(await read(join(root, "wiki/test.md"), "utf8"), "user edited");
     assert.equal(await read(join(root, "personal/note.md"), "utf8"), "mine");
     assert.deepEqual(await syncLocalVault(root, { "wiki/new.md": "updated" }), {

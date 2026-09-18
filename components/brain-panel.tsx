@@ -146,6 +146,7 @@ async function syncVault(
         next[path] = desired;
         continue;
       }
+      if (path.startsWith("raw/") && previous[path] === actual) continue;
       if (!previous[path] || previous[path] !== actual) {
         conflicts++;
         continue;

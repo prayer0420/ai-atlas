@@ -38,7 +38,14 @@ export async function GET(req: NextRequest) {
       .replace(/[%_,()."\\]/g, " ")
       .trim()
       .slice(0, 150);
-    if (search) q = q.ilike("search_text", `%${search}%`);
+    if (/^(rag|llm|mcp)$/i.test(search))
+      // Keep Korean suffixes (RAG는) while excluding fragments such as paragraph.
+      q = q.filter(
+        "search_text",
+        "imatch",
+        `(^|[^a-z0-9])${search}([^a-z0-9]|$)`,
+      );
+    else if (search) q = q.ilike("search_text", `%${search}%`);
     const sort = p.get("sort");
     q = q
       .order(sort === "title" ? "title" : "created_at", {
