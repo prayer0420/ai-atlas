@@ -1,12 +1,26 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { CheckCircle2, Laptop, LoaderCircle, RefreshCw } from "lucide-react";
+import { AtSign, Camera as Instagram, CheckCircle2, Laptop, LoaderCircle, Play, RefreshCw } from "lucide-react";
+type CaptureChannel = "all" | "instagram" | "threads" | "youtube";
 type Job = {
   id: string;
   kind: string;
   status: string;
   error: string | null;
   created_at: string;
+  finished_at: string | null;
+  payload?: { action?: string; channel?: CaptureChannel };
+  result?: {
+    saved?: number;
+    imported?: number;
+    scanned?: number;
+    excluded?: number;
+    unchanged?: number;
+    reason?: string;
+    checked_at?: string;
+    items?: { title: string; url: string; metrics?: { views?: number; likes?: number } }[];
+    failures?: { platform?: string; stage?: string }[];
+  } | null;
 };
 type State = {
   online: boolean;
@@ -69,7 +83,7 @@ export function AutomationStatus({
     void load();
     const timer = setInterval(() => {
       if (document.visibilityState === "visible") void load();
-    }, 15000);
+    }, 5000);
     const visible = () => {
       if (document.visibilityState === "visible") void load();
     };
@@ -107,6 +121,26 @@ export function AutomationStatus({
       setBusy(false);
     }
   }
+  async function collect(channel: CaptureChannel) {
+    setBusy(true);
+    setError("");
+    try {
+      await api("/api/automation", {
+        method: "POST",
+        body: JSON.stringify({ collect: channel }),
+      });
+      await load();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  const collectionJobs =
+    data?.jobs.filter((job) => job.payload?.action === "manual-collect") || [];
+  const activeCollection = collectionJobs.find((job) => ["queued", "running"].includes(job.status));
+  const latestCollection = collectionJobs.find((job) => job.status === "completed" || job.status === "failed");
+  const channelNames: Record<CaptureChannel, string> = { all: "전체", instagram: "Instagram", threads: "Threads", youtube: "YouTube" };
   return (
     <details className="automation-status">
       <summary>
@@ -143,6 +177,62 @@ export function AutomationStatus({
               : "Obsidian 자동 저장 대기"}
           </span>
         </div>
+        <section className="manual-collection" aria-labelledby="manual-collection-title">
+          <div>
+            <strong id="manual-collection-title">지금 새 자료 가져오기</strong>
+            <p>Instagram 새 DM 링크, Threads 새 리포스트, YouTube AI 자료를 확인합니다. 결과는 이곳에 바로 표시되고 새 자료는 학습함에 추가됩니다.</p>
+          </div>
+          <div className="collection-actions">
+            <button className="button primary" disabled={busy || !!activeCollection || !data?.online} onClick={() => collect("all")}>
+              {activeCollection?.payload?.channel === "all" ? <LoaderCircle className="spin" size={16} /> : <Play size={16} />}
+              전체 수집
+            </button>
+            <button className="button secondary" disabled={busy || !!activeCollection || !data?.online} onClick={() => collect("instagram")}>
+              <Instagram size={16} /> Instagram DM
+            </button>
+            <button className="button secondary" disabled={busy || !!activeCollection || !data?.online} onClick={() => collect("youtube")}>
+              <Play size={16} /> YouTube
+            </button>
+            <button className="button secondary" disabled={busy || !!activeCollection || !data?.online} onClick={() => collect("threads")}>
+              <AtSign size={16} /> Threads 리포스트
+            </button>
+          </div>
+          {activeCollection && (
+            <p className="collection-progress" aria-live="polite">
+              <LoaderCircle className="spin" size={15} /> {channelNames[activeCollection.payload?.channel || "all"]} 자료를 {activeCollection.status === "queued" ? "수집 대기 중입니다." : "가져오고 있습니다."}
+            </p>
+          )}
+          {latestCollection && !activeCollection && (
+            <div className="collection-result" aria-live="polite">
+              <strong>
+                {latestCollection.status === "failed"
+                  ? "수집을 완료하지 못했습니다"
+                  : `${channelNames[latestCollection.payload?.channel || "all"]} · 새 자료 ${latestCollection.result?.saved || 0}건`}
+              </strong>
+              {latestCollection.error && <p>{latestCollection.error}</p>}
+              {latestCollection.result?.reason && <p>{latestCollection.result.reason}</p>}
+              {!!latestCollection.result?.unchanged && (
+                <small>이미 확인한 항목 {latestCollection.result.unchanged}건은 다시 저장하지 않았습니다.</small>
+              )}
+              {!!latestCollection.result?.items?.length && (
+                <ul>
+                  {latestCollection.result.items.map((item) => (
+                    <li key={item.url}>
+                      <a href={item.url} target="_blank" rel="noreferrer">{item.title}</a>
+                      {(item.metrics?.views || item.metrics?.likes) && (
+                        <small>{item.metrics.views ? `조회 ${item.metrics.views.toLocaleString("ko-KR")}` : `좋아요 ${item.metrics.likes?.toLocaleString("ko-KR")}`}</small>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {!!latestCollection.result?.failures?.length && (
+                <small>읽지 못한 후보 {latestCollection.result.failures.length}건은 저장하지 않았습니다.</small>
+              )}
+              {latestCollection.finished_at && <small>확인: {new Date(latestCollection.finished_at).toLocaleString("ko-KR")}</small>}
+            </div>
+          )}
+        </section>
         {!!data?.worker?.vault_conflicts && (
           <p>
             직접 수정한 파일 {data.worker.vault_conflicts}개를 보존했습니다.
@@ -157,7 +247,7 @@ export function AutomationStatus({
           </p>
         )}
         <ul>
-          {data?.jobs.map((j) => (
+          {data?.jobs.filter((job) => job.payload?.action !== "manual-collect").map((j) => (
             <li key={j.id}>
               <span>
                 {j.status === "completed" ? (

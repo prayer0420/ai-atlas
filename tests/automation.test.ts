@@ -104,6 +104,11 @@ test("Local queue isolates users, deduplicates work, recovers expired leases, an
       "failed",
     );
     assert.notEqual(await id(alice), a);
+    const collect = await db.query<{ id: string }>(
+      `select ai_atlas_enqueue($1,'daily','manual:all',$2) id`,
+      [alice, JSON.stringify({ action: "manual-collect", channel: "all" })],
+    );
+    assert.ok(collect.rows[0].id);
   } finally {
     await db.close();
   }

@@ -740,3 +740,52 @@ body .news-compare .news-bullets > div:last-child:nth-child(odd) {
   max-width: 65ch;
   color: #76512d;
 }
+.manual-collection {
+  margin: 18px 0;
+  padding: 18px;
+  border: 1px solid #ccd9c8;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.72);
+}
+.manual-collection > div:first-child p {
+  margin: 4px 0 14px;
+  color: #52644f;
+}
+.collection-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.collection-progress {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 14px 0 0;
+  color: #31583b;
+}
+.collection-result {
+  margin-top: 14px;
+  padding: 14px;
+  border-radius: 12px;
+  background: #edf4e9;
+}
+.collection-result p { margin: 6px 0; }
+.collection-result ul {
+  max-height: none;
+  margin: 8px 0;
+}
+.collection-result li {
+  align-items: flex-start;
+  padding: 8px 0;
+}
+.collection-result a {
+  color: #234a32;
+  font-weight: 650;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+.collection-result > small { margin-top: 6px; }
+@media (max-width: 640px) {
+  .collection-actions { display: grid; grid-template-columns: 1fr 1fr; }
+  .collection-actions .button { justify-content: center; width: 100%; }
+}

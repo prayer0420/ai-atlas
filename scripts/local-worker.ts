@@ -12,6 +12,8 @@ import { buildVault, type VaultInput } from "../lib/vault";
 import { syncLocalVault } from "../lib/vault-sync";
 import { kstDate } from "../lib/feeds";
 import { importInbox } from "../lib/inbox";
+import { collectAside, type CaptureChannel } from "../lib/aside-capture";
+import { syncPersonalSocial } from "../lib/personal-social";
 
 process.env.AI_PROVIDER = "local";
 process.env.LOCAL_AI_RUNTIME = "1";
@@ -179,7 +181,44 @@ async function tick() {
     let result: unknown;
     if (current.kind === "analyze")
       result = await analyzeResource(ownerId, current.payload.resourceId);
-    else if (current.kind === "daily") {
+    else if (
+      current.kind === "daily" &&
+      current.payload.action === "manual-collect"
+    ) {
+      const channel = (["all", "instagram", "threads", "youtube"] as const).includes(current.payload.channel as CaptureChannel)
+        ? (current.payload.channel as CaptureChannel)
+        : "all";
+      const personal = channel === "youtube"
+        ? null
+        : await syncPersonalSocial(channel === "all" ? "all" : channel);
+      const youtube = channel === "instagram" || channel === "threads"
+        ? null
+        : await collectAside(undefined, undefined, "youtube", true);
+      const imported = process.env.ATLAS_INBOX_PATH
+        ? await importInbox(ownerId, process.env.ATLAS_INBOX_PATH)
+        : { imported: 0, errors: 0 };
+      result = {
+        mode: "manual",
+        channel,
+        saved: (personal?.saved || 0) + (youtube?.saved || 0),
+        imported: imported.imported,
+        import_errors: imported.errors,
+        scanned: personal?.scanned || 0,
+        excluded: personal?.excluded || 0,
+        unchanged: personal?.unchanged || 0,
+        items: [
+          ...(personal?.items || []),
+          ...(youtube && "items" in youtube ? youtube.items : []),
+        ],
+        failures: [
+          ...(personal && ["failed", "locked"].includes(personal.status)
+            ? [{ platform: "personal-social", stage: personal.status === "locked" ? "collection_locked" : "collection_failed" }]
+            : []),
+          ...(youtube?.failures || []),
+        ],
+        checked_at: new Date().toISOString(),
+      };
+    } else if (current.kind === "daily") {
       const daily = await runDaily(ownerId);
       if (daily.issue?.mode !== "ai")
         throw new AppError(
@@ -221,7 +260,10 @@ async function tick() {
       Number(result.written) > 0
     )
       await enqueue(ownerId, "wiki");
-    if (current.kind === "daily" || current.kind === "analyze") {
+    if (
+      (current.kind === "daily" && current.payload.action !== "manual-collect") ||
+      current.kind === "analyze"
+    ) {
       const prefs = await db
         .from("ai_atlas_preferences")
         .select("auto_wiki")

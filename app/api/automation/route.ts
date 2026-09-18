@@ -10,6 +10,7 @@ import {
 } from "@/lib/server";
 import { ensureOwner } from "@/lib/brain-ai";
 import { enqueue, localMode } from "@/lib/automation";
+import { z } from "zod";
 export const dynamic = "force-dynamic";
 export async function GET(req: NextRequest) {
   try {
@@ -23,7 +24,7 @@ export async function GET(req: NextRequest) {
         .maybeSingle(),
       db
         .from("ai_atlas_queue")
-        .select("id,kind,status,attempts,error,created_at,finished_at")
+        .select("id,kind,status,attempts,error,created_at,finished_at,payload,result")
         .order("created_at", { ascending: false })
         .limit(12),
       db
@@ -71,6 +72,16 @@ export async function POST(req: NextRequest) {
         ).error,
       );
       return NextResponse.json({ ok: true });
+    }
+    const collect = z.enum(["all", "instagram", "threads", "youtube"]).safeParse(input.collect);
+    if (collect.success) {
+      const result = await enqueue(
+        user.id,
+        "daily",
+        { action: "manual-collect", channel: collect.data },
+        `manual:${collect.data}`,
+      );
+      return NextResponse.json(result, { status: 202 });
     }
     const id = uuid.parse(input.id);
     const job = await db

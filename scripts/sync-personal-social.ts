@@ -4,7 +4,7 @@ async function main() {
   if (process.argv.includes("--if-due")) {
     const previous = await fs.readFile(".local/personal-social-status.json", "utf8").then(JSON.parse).catch(() => null);
     const day = (value: string | Date) => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(new Date(value));
-    if (previous?.status === "completed" && previous.finished_at && day(previous.finished_at) === day(new Date())) { console.log("오늘 개인 소셜 전체 조회를 이미 완료했습니다."); return; }
+    if (previous?.status === "completed" && previous.scope === "all" && previous.finished_at && day(previous.finished_at) === day(new Date())) { console.log("오늘 개인 소셜 전체 조회를 이미 완료했습니다."); return; }
   }
   const result = await syncPersonalSocial();
   console.log(JSON.stringify(result));

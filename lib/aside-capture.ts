@@ -74,6 +74,15 @@ console.log('ATLAS_CAPTURE_RESULT='+JSON.stringify({items,failures,found:found.l
 
 type CaptureItem = { title: string; url: string; text: string; observed_at?: string; metrics?: { views?: number; likes?: number; comments?: number } };
 type CaptureState = { date: string; count: number; urls: string[] };
+export type CaptureChannel = "all" | "instagram" | "threads" | "youtube";
+export function capturePlan(channel: CaptureChannel, budget: number) {
+  const safe = Math.max(0, Math.min(10, Math.trunc(budget)));
+  return {
+    social: channel === "all" ? (["instagram", "threads"] as SocialPlatform[]) : channel === "instagram" || channel === "threads" ? [channel] : [],
+    socialLimit: Math.min(3, safe),
+    youtubeLimit: channel === "all" || channel === "youtube" ? Math.min(4, safe) : 0,
+  };
+}
 
 /** Reuses Aside u0 browser login. No password, cookies or tokens leave the browser. */
 export async function inspectSocial(platform: SocialPlatform, limit = 3, url?: string) {
@@ -94,10 +103,17 @@ export async function inspectSocial(platform: SocialPlatform, limit = 3, url?: s
 }
 
 /** One lock and one daily budget shared by all three Aside collection channels. */
-export async function collectAside(videoId?: string, socialPostUrl?: string) {
+export async function collectAside(
+  videoId?: string,
+  socialPostUrl?: string,
+  channel: CaptureChannel = "all",
+  manual = false,
+) {
   if (videoId && socialPostUrl) throw Error("영상 ID 또는 소셜 게시물 주소 중 하나만 지정하세요.");
   if (videoId && !/^[\w-]{11}$/.test(videoId)) throw Error("Invalid YouTube ID");
   const direct = socialPostUrl ? socialUrl(socialPostUrl) : null;
+  if (direct && channel !== "all" && channel !== direct.platform) throw Error("요청 플랫폼과 게시물 주소가 다릅니다.");
+  if (videoId && channel !== "all" && channel !== "youtube") throw Error("YouTube 영상과 요청 플랫폼이 다릅니다.");
   const directory = process.env.ATLAS_INBOX_PATH;
   if (!directory) throw Error("ATLAS_INBOX_PATH is required");
   await fs.mkdir(directory, { recursive: true });
@@ -128,12 +144,13 @@ export async function collectAside(videoId?: string, socialPostUrl?: string) {
       }
     }
     state.count = Math.max(state.count, today.size);
-    const remaining = Math.max(0, 10 - state.count);
-    if (!remaining) return { saved: 0, remaining: 0, failures: [], reason: "오늘 Aside 수집 한도 10건에 도달했습니다." };
+    const remaining = manual ? 10 : Math.max(0, 10 - state.count);
+    if (!remaining) return { saved: 0, remaining: 0, failures: [], reason: "오늘 Aside 자동 수집 한도 10건에 도달했습니다." };
     const gathered: CaptureItem[] = [];
     const failures: unknown[] = [];
-    if (!videoId) {
-      const platforms: SocialPlatform[] = direct ? [direct.platform] : ["instagram", "threads"];
+    const plan = capturePlan(direct ? direct.platform : videoId ? "youtube" : channel, remaining);
+    if (!videoId && plan.social.length) {
+      const platforms: SocialPlatform[] = direct ? [direct.platform] : plan.social;
       for (const platform of platforms) {
         const slots = Math.min(direct ? 1 : 3, remaining - gathered.length);
         if (slots <= 0) break;
@@ -144,9 +161,9 @@ export async function collectAside(videoId?: string, socialPostUrl?: string) {
         } catch { failures.push({ platform, stage: "browser_unavailable" }); }
       }
     }
-    if (!direct && gathered.length < remaining) {
+    if (!direct && plan.youtubeLimit && gathered.length < remaining) {
       try {
-        const result = await gatherYoutube(videoId, Math.min(videoId ? 1 : 4, remaining - gathered.length));
+        const result = await gatherYoutube(videoId, Math.min(videoId ? 1 : plan.youtubeLimit, remaining - gathered.length));
         failures.push(...result.failures);
         for (const item of result.items) if (!seen.has(item.url)) { seen.add(item.url); gathered.push(item); }
       } catch { failures.push({ platform: "youtube", stage: "collection_failed" }); }
@@ -154,16 +171,16 @@ export async function collectAside(videoId?: string, socialPostUrl?: string) {
     const saved = gathered.slice(0, remaining);
     if (saved.length) {
       const bundle = captureSchema.parse({ items: saved });
-      const name = `aside-${date}-${Date.now()}.json`;
+      const name = `${manual ? "manual-" : ""}aside-${date}-${Date.now()}.json`;
       const temp = path.join(directory, name + ".tmp");
       await fs.writeFile(temp, JSON.stringify(bundle, null, 2), { flag: "wx" });
       await fs.rename(temp, path.join(directory, name));
-      state.count += bundle.items.length;
+      if (!manual) state.count += bundle.items.length;
     }
     state.urls = [...seen].slice(-5000);
     await fs.writeFile(statePath + ".tmp", JSON.stringify(state));
     await fs.rename(statePath + ".tmp", statePath);
-    const result = { saved: saved.length, remaining: Math.max(0, 10 - state.count), items: saved.map(({ title, url, metrics }) => ({ title, url, metrics })), failures, checked_at: new Date().toISOString() };
+    const result = { mode: manual ? "manual" : "automatic", channel, saved: saved.length, remaining: manual ? null : Math.max(0, 10 - state.count), items: saved.map(({ title, url, metrics }) => ({ title, url, metrics })), failures, checked_at: new Date().toISOString() };
     await fs.writeFile(path.join(projectRoot, ".local/social-capture-status.json"), JSON.stringify(result, null, 2));
     return result;
   } finally { await lock.close(); await fs.unlink(lockPath); }

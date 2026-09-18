@@ -56,7 +56,9 @@ export function listingCode(channel: PersonalChannel) {
     return {rows,loading,hasContainer:true};`;
 }
 
-export async function syncPersonalSocial() {
+export async function syncPersonalSocial(
+  only: "all" | "instagram" | "threads" = "all",
+) {
   const config = JSON.parse(await fs.readFile(path.join(local, "personal-social.json"), "utf8")) as { instagram: string; threads: string; instagram_url: string; threads_url: string; instagram_mode?: "dm" | "saved" };
   const inbox = process.env.ATLAS_INBOX_PATH;
   if (!inbox) throw Error("ATLAS_INBOX_PATH is required");
@@ -67,15 +69,20 @@ export async function syncPersonalSocial() {
     if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
     const previous = JSON.parse(await fs.readFile(lockPath, "utf8"));
     if (!Number.isInteger(previous.pid) || previous.pid <= 0) throw Error("Invalid lock; manual inspection required");
-    try { process.kill(previous.pid, 0); return { status: "locked" }; }
-    catch (e) { if ((e as NodeJS.ErrnoException).code !== "ESRCH") return { status: "locked" }; }
+    try {
+      process.kill(previous.pid, 0);
+      return { status: "locked", scope: only, scanned: 0, saved: 0, excluded: 0, unchanged: 0, retry: 0, channels: {}, items: [] as { title: string; url: string }[] };
+    } catch (e) {
+      if ((e as NodeJS.ErrnoException).code !== "ESRCH")
+        return { status: "locked", scope: only, scanned: 0, saved: 0, excluded: 0, unchanged: 0, retry: 0, channels: {}, items: [] as { title: string; url: string }[] };
+    }
     await fs.unlink(lockPath);
     lock = await fs.open(lockPath, "wx");
   }
   await lock.writeFile(JSON.stringify({ pid: process.pid, started_at: new Date().toISOString() }));
   const statePath = path.join(local, "personal-social-state.json");
   let state: State = { version: 1, entries: {} };
-  const report = { started_at: new Date().toISOString(), finished_at: "", status: "running", scanned: 0, saved: 0, excluded: 0, unchanged: 0, retry: 0, channels: {} as Record<string, string> };
+  const report = { started_at: new Date().toISOString(), finished_at: "", status: "running", scope: only, scanned: 0, saved: 0, excluded: 0, unchanged: 0, retry: 0, channels: {} as Record<string, string>, items: [] as { title: string; url: string }[] };
   const statusPath = path.join(local, "personal-social-status.json");
   let session: AsideSession | undefined;
   try {
@@ -93,7 +100,14 @@ export async function syncPersonalSocial() {
     const runtime = JSON.parse(await fs.readFile(path.join(local, "hermes-runtime.json"), "utf8"));
     session = new AsideSession(runtime.aside);
     await atomic(statusPath, report);
-    const channels: PersonalChannel[] = [config.instagram_mode === "dm" ? "instagram_dm" : "instagram_saved", "threads_reposts"];
+    const channels: PersonalChannel[] = [
+      ...(only === "all" || only === "instagram"
+        ? [config.instagram_mode === "dm" ? "instagram_dm" : "instagram_saved"] as PersonalChannel[]
+        : []),
+      ...(only === "all" || only === "threads"
+        ? ["threads_reposts"] as PersonalChannel[]
+        : []),
+    ];
     for (const channel of channels) {
       const owner = channel !== "threads_reposts" ? config.instagram : config.threads;
       const url = channel !== "threads_reposts" ? config.instagram_url : config.threads_url;
@@ -140,6 +154,7 @@ export async function syncPersonalSocial() {
             const name = "personal-" + createHash("sha256").update(normalized).digest("hex") + ".json";
             await atomic(path.join(inbox, name), captureSchema.parse({ items: [item] }));
             existing.add(normalized); mark("saved", "new_personal_selection"); report.saved++;
+            report.items.push({ title: item.title, url: item.url });
           } catch { mark("retry", "read_or_save_failed"); report.retry++; }
           finally { await atomic(statePath, state); await atomic(statusPath, report); }
         }
@@ -152,7 +167,8 @@ export async function syncPersonalSocial() {
       await session.run("await closeTab(atlasPersonalPage);return true;");
     }
     report.status = Object.values(report.channels).every((status) => status === "end_observed") ? "completed" : "partial";
-    if (report.status === "completed") state.last_complete = new Date().toISOString();
+    if (report.status === "completed" && only === "all")
+      state.last_complete = new Date().toISOString();
     await atomic(statePath, state);
   } catch { report.status = "failed"; }
   finally {

@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { parseSocialPage, socialUrl, socialBrowserCode } from "../lib/social-capture";
+import { capturePlan } from "../lib/aside-capture";
 const body = "AI 자동화를 시작할 때에는 반복 업무의 입력과 출력을 먼저 정의하고 작은 작업부터 실행합니다. 결과에 근거가 있는지 검토하고 실패한 부분은 기록하여 다음 실행에 반영합니다.";
 test("social capture only accepts canonical public post URLs", () => {
   assert.equal(socialUrl("https://threads.net/@author/post/abc?utm_source=x").url, "https://www.threads.com/@author/post/abc/");
@@ -53,4 +54,10 @@ test("browser code has valid JS and clamps per-platform work", () => {
   const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
   assert.doesNotThrow(() => new AsyncFunction(code));
   assert.throws(() => socialBrowserCode("threads", 1, "https://instagram.com/p/abc/"));
+});
+test("manual collection can target one source or all sources within one-run caps", () => {
+  assert.deepEqual(capturePlan("all", 10), { social: ["instagram", "threads"], socialLimit: 3, youtubeLimit: 4 });
+  assert.deepEqual(capturePlan("instagram", 10), { social: ["instagram"], socialLimit: 3, youtubeLimit: 0 });
+  assert.deepEqual(capturePlan("threads", 2), { social: ["threads"], socialLimit: 2, youtubeLimit: 0 });
+  assert.deepEqual(capturePlan("youtube", 10), { social: [], socialLimit: 3, youtubeLimit: 4 });
 });
