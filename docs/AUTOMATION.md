@@ -60,7 +60,7 @@ flowchart LR
 
 ## Aside 연결 범위
 
-[공식 시작 문서](https://docs.aside.com/help/get-started)는 macOS 15 이상을 안내하고, [공개 다운로드](https://aside.com/download)도 DMG 설치를 안내합니다. 반면 [개발자 문서](https://docs.aside.com/help/developers)에는 Windows CLI가 있습니다. 이 PC에 로그인된 Aside 브라우저가 없어 실제 Aside 루틴은 활성화하지 않았습니다. 무료 플랜에서 가능한 세 루틴을 준비했으며, Aside 사용 환경이 갖춰지면 해당 지시문으로 실행할 수 있습니다. 현재 공식 RSS 자동 수집은 Aside와 관계없이 작동합니다.
+[공식 시작 문서](https://docs.aside.com/help/get-started)는 macOS 15 이상을 안내하고, [공개 다운로드](https://aside.com/download)도 DMG 설치를 안내합니다. 반면 [개발자 문서](https://docs.aside.com/help/developers)에는 Windows CLI가 있습니다. 이 PC에서는 Windows용 Aside CLI와 로그인된 Aside 브라우저를 연결했고, YouTube 검색·메타데이터·공개 자막 수집을 실제로 확인했습니다. Hermes의 `AI Atlas Daily Collection` 작업이 매일 새벽 1시에 최대 10건을 수집하며, 실패하면 기존 자료를 보존합니다. Instagram·Threads는 로그인·플랫폼 제한을 우회하지 않으므로 링크와 본문을 직접 추가합니다. 공식 RSS 자동 수집은 Aside와 관계없이 작동합니다.
 
 ### 루틴 1 · 매일 AI 실용 팁 수집
 
@@ -114,7 +114,7 @@ AI 교육 분야에서 실제 반응을 확인할 수 있는 공개 카드뉴스
 - 2026-09-18 소식 3개와 카드 12장, 연결된 Wiki 문서 2개 이상, 무료 로컬 모델로 생성한 상세 학습 노트를 실제 DB에 저장했습니다.
 - Obsidian 폴더와 ZIP 내보내기에서 Markdown 및 카드 이미지 12장을 확인했습니다.
 - 자동화 핵심 테스트 5개와 전체 테스트 14개, TypeScript 및 프로덕션 빌드를 통과했습니다.
-- 브라우저 화면의 시각적 검사, 모든 기종의 설치·공유 동작, 로그인된 Aside 실제 실행은 이번 검증 범위에 포함되지 않습니다.
+- 로그인된 Aside에서 YouTube 검색과 Atlas 저장을 실제로 확인했습니다. Instagram·Threads 전체 자동 수집, 모든 기종의 설치·공유 동작은 이번 검증 범위에 포함되지 않습니다.
 
 ## 후속 개선 순서
 
