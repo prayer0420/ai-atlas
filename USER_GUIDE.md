@@ -92,4 +92,4 @@ PC에 준비된 `C:\Users\c\OneDrive\문서\AI Atlas Second Brain` 폴더를 Obs
 
 **설정 → 읽던 페이지에서 바로 담기**에서 브라우저 북마크용 수집 코드를 복사할 수 있습니다. 휴대폰에서는 홈 화면에 추가해 사용하고, 지원되는 Android 브라우저는 공유 메뉴로 링크를 보낼 수도 있습니다. 저장 전 입력 내용을 확인하세요.
 
-Aside 등 자동화 도구의 JSON 결과는 `C:\Users\c\OneDrive\문서\AI Atlas Inbox`에 넣으면 가져옵니다. 실제 Aside 계정 루틴은 아직 연결되지 않았으며, 무료 루틴 지시문과 수집 형식은 [무료 자동화 운영 안내](./docs/AUTOMATION.md)에 준비되어 있습니다.
+Aside 수집은 Hermes의 매일 새벽 1시 작업에 연결되어 있습니다. Instagram·Threads는 같은 Aside 브라우저에 한 번 로그인하면 세션이 유지되는 동안 자동으로 접속합니다. 비밀번호는 수집 코드에 저장하지 않습니다. 로그인 만료 시 결과에 `login_required`가 표시되며, 다시 로그인하면 다음 실행부터 재개됩니다. JSON 결과는 `C:\Users\c\OneDrive\문서\AI Atlas Inbox`에서 작업기가 가져갑니다. 하루 최대 10건의 Aside 수집과 별도 RSS 수집이 있으며, [운영 안내](./docs/AUTOMATION.md)에서 범위를 확인할 수 있습니다.

@@ -690,9 +690,10 @@ export function BrainPanel({
                     </button>
                   </div>
                   <p className="brain-muted">
-                    Instagram·Threads는 링크와 본문을 자료 추가에서 가져올 수
-                    있습니다. 전체 플랫폼의 인기 순위를 자동 조회하는 기능은
-                    연결되어 있지 않습니다.
+                    Instagram·Threads는 PC의 Aside 예약 수집으로 가져올 수
+                    있습니다. 최초 로그인 후 세션을 재사용하며, 접근하지 못한
+                    자료는 링크와 본문을 직접 추가할 수 있습니다. 전체 플랫폼
+                    인기 순위가 아닌 공개 검색 후보를 수집합니다.
                   </p>
                 </form>
               )}

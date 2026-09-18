@@ -60,7 +60,13 @@ flowchart LR
 
 ## Aside 연결 범위
 
-[공식 시작 문서](https://docs.aside.com/help/get-started)는 macOS 15 이상을 안내하고, [공개 다운로드](https://aside.com/download)도 DMG 설치를 안내합니다. 반면 [개발자 문서](https://docs.aside.com/help/developers)에는 Windows CLI가 있습니다. 이 PC에서는 Windows용 Aside CLI와 로그인된 Aside 브라우저를 연결했고, YouTube 검색·메타데이터·공개 자막 수집을 실제로 확인했습니다. Hermes의 `AI Atlas Daily Collection` 작업이 매일 새벽 1시에 최대 10건을 수집하며, 실패하면 기존 자료를 보존합니다. Instagram·Threads는 로그인·플랫폼 제한을 우회하지 않으므로 링크와 본문을 직접 추가합니다. 공식 RSS 자동 수집은 Aside와 관계없이 작동합니다.
+이 PC에서는 Windows Aside CLI와 브라우저 프로필 u0를 사용합니다. Hermes의 `AI Atlas Daily Collection`이 매일 새벽 1시에 실행되며, Instagram 3건·Threads 3건·YouTube 4건 이내로 읽습니다. Instagram·Threads는 공개 검색 결과에서 게시물로 이동해 표시되는 본문을 수집하고, 댓글·검색 미리보기·로그인 화면을 본문으로 저장하지 않습니다. 플랫폼 전체 인기 순위나 이미지 분석은 제공하지 않습니다.
+
+Aside에서 두 사이트에 최초 로그인하면 저장된 세션을 자동 재사용합니다. 비밀번호·쿠키를 파일로 추출하지 않습니다. 로그인 만료는 `login_required`, 추가 인증은 `challenge`, 본문 파싱 실패는 `unreadable` 등으로 보고합니다. 재시도를 포함한 Aside 저장량은 하루 10건이며, 중복 URL을 제외합니다. Vercel RSS 수집은 별도 경로이므로 이 한도에 포함되지 않습니다.
+
+`atlas_collect_aside({})`는 세 플랫폼을 실행하고, `atlas_collect_aside({"post_url":"공개 게시물 URL"})`은 지정한 Instagram·Threads 게시물 하나를 읽습니다. 작업 결과는 `.local/social-capture-status.json`에도 남깁니다. 수집 잠금 파일은 동시 실행을 막으며 프로세스가 비정상 종료돼 남았을 때에는 실행 중 프로세스를 확인한 뒤 복구해야 합니다.
+
+검증: Instagram 실제 본문 1건을 수집함에 저장했고 Windows 작업기가 새 자료를 가져가는 것을 확인했습니다. Threads 공개 본문은 읽힌 사례가 있으나 후속 접속에서 로그인 안내가 나타나 로그인 세션 확인이 남아 있습니다. 로그인 없이 모든 게시물을 읽을 수 있다고 보장하지 않습니다.
 
 ### 루틴 1 · 매일 AI 실용 팁 수집
 
@@ -114,7 +120,7 @@ AI 교육 분야에서 실제 반응을 확인할 수 있는 공개 카드뉴스
 - 2026-09-18 소식 3개와 카드 12장, 연결된 Wiki 문서 2개 이상, 무료 로컬 모델로 생성한 상세 학습 노트를 실제 DB에 저장했습니다.
 - Obsidian 폴더와 ZIP 내보내기에서 Markdown 및 카드 이미지 12장을 확인했습니다.
 - 자동화 핵심 테스트 5개와 전체 테스트 14개, TypeScript 및 프로덕션 빌드를 통과했습니다.
-- 로그인된 Aside에서 YouTube 검색과 Atlas 저장을 실제로 확인했습니다. Instagram·Threads 전체 자동 수집, 모든 기종의 설치·공유 동작은 이번 검증 범위에 포함되지 않습니다.
+- Aside의 YouTube 수집, Instagram 본문 읽기·저장, Threads 공개 본문 읽기를 확인했습니다. Threads 지속 접속은 로그인 세션 확인이 남아 있고, 플랫폼 전체 인기 수집과 모든 기종의 설치·공유는 검증 범위에 포함되지 않습니다.
 
 ## 후속 개선 순서
 
