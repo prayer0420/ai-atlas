@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { z } from "zod";
 import { admin, AppError, checkDb } from "./server";
 import { aiConfigured } from "./ai-config";
 import { structured, claimTask, aiProblem } from "./brain-ai";
@@ -192,7 +193,19 @@ export async function compileWiki(
           output_tokens: job.output_tokens,
         }
       : await structured(
-          wikiBundleSchema,
+          wikiBundleSchema.extend({
+            pages: z
+              .array(
+                wikiBundleSchema.shape.pages.element.extend({
+                  source_ids: z
+                    .array(z.enum([...knownIds] as [string, ...string[]]))
+                    .min(1)
+                    .max(30),
+                }),
+              )
+              .min(1)
+              .max(5),
+          }),
           "knowledge_wiki",
           `당신은 개인 LLM Wiki 편집자입니다. 원문을 수정하지 않고 지속적으로 관리할 지식을 작성합니다. ${question ? "질문에 답하는 문서 하나만 작성하세요. 근거가 부족한 부분은 명확히 밝히고 답을 지어내지 마세요." : "새 자료를 기존 위키에 통합하여 서로 연결된 개념·도구·실용 가이드 2~5개를 작성하세요. 문서별 줄거리 나열보다 여러 출처의 공통점·차이·활용법을 설명하세요."} 기존 문서를 갱신할 때 기존 slug를 정확히 유지하고 여전히 유효한 내용을 보존합니다. protected 문서는 갱신하지 않습니다. body는 읽기 쉬운 Markdown으로, 정의·작동 원리·실제 예시·주의점·다음 질문을 담습니다. 입력의 공개 피드 요약은 전체 본문을 검증한 자료가 아니므로 과도한 결론을 내리지 않습니다. 모순되는 주장과 오래된 주장은 caveats에 남깁니다. 출처는 실제 사용한 자료의 UUID를 source_ids에 넣으세요. 기존 문서의 근거도 유지하세요. links는 관련된 기존 또는 이번 새 문서의 slug만 사용합니다. body의 관련 링크는 [[slug|표시 이름]] 형태입니다. slug는 짧은 영문 소문자와 하이픈 또는 한글로 만듭니다. 입력에 없는 URL·자료 UUID·성과 수치를 만들지 마세요.`,
           {
