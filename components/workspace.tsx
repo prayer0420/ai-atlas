@@ -51,6 +51,7 @@ import { LessonView } from "./lesson-view";
 import { readingExcerpt } from "@/lib/reading";
 import dynamic from "next/dynamic";
 import { AutomationStatus } from "./automation-status";
+import { ReadingDesk } from "./reading-desk";
 const BrainPanel = dynamic(() =>
   import("./brain-panel").then((module) => module.BrainPanel),
 );
@@ -121,6 +122,20 @@ export function Workspace() {
   const isDemo = !session;
   const captureHandled = useRef(false);
   const deepLinkHandled = useRef(false);
+  const searchInput = useRef<HTMLInputElement>(null);
+  const collection = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setNavOpen(false);
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k" && searchInput.current && !dialog) {
+        event.preventDefault();
+        searchInput.current.focus();
+        searchInput.current.scrollIntoView({ block: "center", behavior: "auto" });
+      }
+    };
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, [dialog]);
   useEffect(() => {
     if (!authReady || captureHandled.current) return;
     const p = new URLSearchParams(window.location.search);
@@ -517,6 +532,8 @@ export function Workspace() {
     : resources;
   if (isDemo && sort === "title")
     shown = [...shown].sort((a, b) => a.title.localeCompare(b.title, "ko"));
+  if (isDemo && sort === "old")
+    shown = [...shown].sort((a, b) => a.created_at.localeCompare(b.created_at));
   const title =
     category !== "전체"
       ? category
@@ -545,12 +562,13 @@ export function Workspace() {
         />
       )}
       <aside className={`sidebar ${navOpen ? "open" : ""}`}>
+        <button className="mobile-nav-close" aria-label="사이드바 닫기" onClick={() => setNavOpen(false)}><X size={20} /></button>
         <button className="brand" onClick={() => navigate("library")}>
           <span className="brand-mark">
             A<span />
           </span>
           <span>
-            AI Atlas<small>MY KNOWLEDGE SPACE</small>
+            atlas<small>A PERSONAL FIELD GUIDE</small>
           </span>
         </button>
         <button
@@ -666,7 +684,7 @@ export function Workspace() {
             >
               <Menu size={20} />
             </button>
-            <span>나의 워크스페이스</span>
+            <span>나의 서재</span>
             <span className="slash">/</span>
             <strong>{selected ? "학습 노트" : title}</strong>
           </div>
@@ -741,12 +759,10 @@ export function Workspace() {
             />
           ) : (
             <>
-              <div className="page-heading">
+              <div className={`page-heading ${view === "library" && category === "전체" ? "library-heading" : ""}`}>
                 <div>
                   <div className="eyebrow">
-                    {isDemo
-                      ? "EXPLORE YOUR KNOWLEDGE"
-                      : "YOUR KNOWLEDGE, CONNECTED"}
+                    YOUR PERSONAL LIBRARY
                   </div>
                   <h1>
                     {title}
@@ -921,35 +937,28 @@ export function Workspace() {
                 </div>
               ) : (
                 <>
-                  {isDemo && view === "library" && category === "전체" && (
-                    <div className="welcome-strip">
-                      <div className="welcome-symbol">
-                        <Sparkles size={25} />
-                      </div>
-                      <div>
-                        <strong>흩어진 발견을, 쌓이는 지식으로.</strong>
-                        <p>
-                          학습 노트 예시를 열어보세요. 내 자료는 로그인 후
-                          저장할 수 있어요.
-                        </p>
-                      </div>
-                      <button
-                        className="text-button"
-                        onClick={() => openResource(demoResources[0])}
-                      >
-                        노트 둘러보기 <ArrowRight size={17} />
-                      </button>
-                    </div>
+                  {view === "library" && category === "전체" && !query && source === "all" && page === 0 && !loading && (
+                    <ReadingDesk resources={active} demo={isDemo} onRead={openResource} onBrowse={() => {
+                      collection.current?.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
+                      searchInput.current?.focus({ preventScroll: true });
+                    }} />
                   )}
-                  <div className="filter-toolbar">
+                  {view === "library" && (
+                    <nav className="topic-tabs" aria-label="서재 분야">
+                      {["전체", ...categories].map((topic) => <button key={topic} aria-pressed={category === topic} onClick={() => navigate("library", topic)}>{topic === "전체" ? "모든 발견" : topic}</button>)}
+                    </nav>
+                  )}
+                  <div className="filter-toolbar" ref={collection}>
                     <div className="search-box">
                       <Search size={19} />
                       <input
+                        ref={searchInput}
                         aria-label="자료 검색"
                         value={query}
                         onChange={(e) => setQuery(e.target.value)}
-                        placeholder="제목, 본문, 태그로 검색"
+                        placeholder="어떤 지식을 찾고 있나요?"
                       />
+                      {!query && <kbd className="search-shortcut">Ctrl K</kbd>}
                       {query && (
                         <button
                           className="icon-button"
@@ -1019,7 +1028,7 @@ export function Workspace() {
                     <span className="list-hint">
                       {view === "trash"
                         ? "필요한 자료를 복원하세요"
-                        : "작은 발견 하나도 놓치지 않도록"}
+                        : "한 편씩 읽고, 생각을 연결하세요"}
                     </span>
                   </div>
                   {loading ? (
@@ -1059,7 +1068,7 @@ export function Workspace() {
                       className={`resource-grid ${layout === "list" ? "list-layout" : ""}`}
                     >
                       {shown.map((r, i) => (
-                        <article className="resource-card" key={r.id}>
+                        <article className="resource-card" key={r.id} style={{ animationDelay: `${Math.min(i, 8) * 35}ms` }}>
                           <button
                             className="card-main"
                             onClick={() =>
@@ -1142,6 +1151,7 @@ export function Workspace() {
                           {r.favorite && (
                             <span
                               className="card-bookmark"
+                              role="img"
                               aria-label="즐겨찾기"
                             >
                               <Bookmark size={15} fill="currentColor" />

@@ -78,7 +78,7 @@ export function LessonView({
             <Bookmark size={18} fill={r.favorite ? "currentColor" : "none"} />
           </button>
           {l && (
-            <button className="secondary-button" onClick={exportNote}>
+            <button className="secondary-button" onClick={exportNote} aria-label="노트 내보내기">
               <Download size={16} />
               <span>노트 내보내기</span>
             </button>
