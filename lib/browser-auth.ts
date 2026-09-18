@@ -1,48 +1,5 @@
 import type { Session, SupabaseClient } from "@supabase/supabase-js";
 
-const sessionBackupKey = "ai-atlas-auth-backup";
-
-type SessionStorage = Pick<Storage, "getItem" | "setItem" | "removeItem">;
-
-function browserStorage(): SessionStorage | null {
-  if (typeof window === "undefined") return null;
-  try {
-    return window.localStorage;
-  } catch {
-    return null;
-  }
-}
-
-function saveSessionBackup(session: Session, storage = browserStorage()) {
-  if (!storage) return;
-  storage.setItem(
-    sessionBackupKey,
-    JSON.stringify({
-      access_token: session.access_token,
-      refresh_token: session.refresh_token,
-    }),
-  );
-}
-
-function readSessionBackup(storage = browserStorage()) {
-  if (!storage) return null;
-  try {
-    const value = JSON.parse(storage.getItem(sessionBackupKey) || "null");
-    if (
-      typeof value?.access_token === "string" &&
-      typeof value?.refresh_token === "string"
-    )
-      return value as { access_token: string; refresh_token: string };
-  } catch {
-    storage.removeItem(sessionBackupKey);
-  }
-  return null;
-}
-
-export function clearBrowserSessionBackup(storage = browserStorage()) {
-  storage?.removeItem(sessionBackupKey);
-}
-
 export type AuthCallback =
   | { kind: "implicit"; accessToken: string; refreshToken: string }
   | { kind: "pkce"; code: string }
@@ -92,7 +49,6 @@ export function cleanAuthCallbackUrl(input: string) {
 export async function restoreBrowserSession(
   client: SupabaseClient,
   href: string,
-  storage = browserStorage(),
 ): Promise<{ session: Session | null; callback: boolean }> {
   const callback = parseAuthCallback(href);
   if (callback?.kind === "error") throw new Error(callback.message);
@@ -100,26 +56,13 @@ export async function restoreBrowserSession(
     const { error } = await client.auth.exchangeCodeForSession(callback.code);
     if (error) throw error;
   } else if (callback?.kind === "implicit") {
-    const { data, error } = await client.auth.setSession({
+    const { error } = await client.auth.setSession({
       access_token: callback.accessToken,
       refresh_token: callback.refreshToken,
     });
     if (error) throw error;
-    if (data.session) saveSessionBackup(data.session, storage);
   }
-  let { data, error } = await client.auth.getSession();
+  const { data, error } = await client.auth.getSession();
   if (error) throw error;
-  if (!data.session) {
-    const backup = readSessionBackup(storage);
-    if (backup) {
-      const restored = await client.auth.setSession(backup);
-      if (restored.error) {
-        clearBrowserSessionBackup(storage);
-        throw restored.error;
-      }
-      data = { session: restored.data.session };
-    }
-  }
-  if (data.session) saveSessionBackup(data.session, storage);
   return { session: data.session, callback: Boolean(callback) };
 }

@@ -6,7 +6,6 @@ import {
   type Session,
 } from "@supabase/supabase-js";
 import {
-  clearBrowserSessionBackup,
   cleanAuthCallbackUrl,
   parseAuthCallback,
   restoreBrowserSession,
@@ -693,8 +692,7 @@ export function Workspace() {
             onClick={
               session
                 ? async () => {
-                  await client?.auth.signOut();
-                    clearBrowserSessionBackup();
+                    await client?.auth.signOut();
                     setSession(null);
                     notify("로그아웃했습니다.");
                   }
