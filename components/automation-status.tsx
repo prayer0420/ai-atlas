@@ -207,7 +207,7 @@ export function AutomationStatus({
               <strong>
                 {latestCollection.status === "failed"
                   ? "수집을 완료하지 못했습니다"
-                  : `${channelNames[latestCollection.payload?.channel || "all"]} · 새 자료 ${latestCollection.result?.saved || 0}건`}
+                  : `${channelNames[latestCollection.payload?.channel || "all"]} · 수집 ${latestCollection.result?.saved || 0}건 · 학습함 새 추가 ${latestCollection.result?.imported || 0}건`}
               </strong>
               {latestCollection.error && <p>{latestCollection.error}</p>}
               {latestCollection.result?.reason && <p>{latestCollection.result.reason}</p>}
