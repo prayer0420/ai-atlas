@@ -42,8 +42,8 @@ export function parseSocialPage(page: SocialPage) {
     scope = scope.split(/\n[^\n]*- button[^\n]*:\n\s+- img "(?:댓글 더 읽어들이기|Load more comments)"/)[0];
   }
   const texts = [...scope.matchAll(/- (?:text|heading[^:\n]*): "([^\n]*)"/g)]
-    .map((m) => m[1]).filter((value) => value.length >= 60);
-  const body = platform === "instagram" ? texts[0] : texts.sort((a, b) => b.length - a.length)[0];
+    .map((m) => m[1]);
+  const body = texts[0]?.length >= 60 ? texts[0] : undefined;
   if (!body || /(?:비밀번호|password).*(?:로그인|log in)/i.test(body)) {
     return { status: /로그인|log in|sign in/i.test(tree) ? "login_required" : "unreadable", url, platform };
   }

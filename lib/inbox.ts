@@ -33,7 +33,7 @@ export async function importInbox(userId: string, directory: string) {
     errors = 0;
   const entries = await fs.readdir(root, { withFileTypes: true });
   for (const entry of entries
-    .filter((e) => e.isFile() && e.name.endsWith(".json"))
+    .filter((e) => e.isFile() && !e.name.startsWith(".") && e.name.endsWith(".json"))
     .slice(0, 5)) {
     const file = path.join(root, entry.name);
     try {

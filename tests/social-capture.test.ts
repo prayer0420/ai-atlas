@@ -25,6 +25,10 @@ test("login screens and search snippets never become saved evidence", () => {
   assert.equal(result.status, "login_required");
   assert.equal(result.item, undefined);
 });
+test("a short Threads post must not be replaced by its longer quote", () => {
+  const result = parseSocialPage({ url: "https://threads.com/@author/post/abc", tree: `- region "칼럼 본문":\n  - generic [ref=e1]:\n    - text: "짧은 본문"\n    - link [ref=e2]:\n      - text: "${body}"` });
+  assert.equal(result.item, undefined);
+});
 test("logged-in Instagram skips the image carousel and longer replies", () => {
   const result = parseSocialPage({ url: "https://instagram.com/p/abc/", tree: `- main:\n  - generic [ref=e1] [scrollable]:\n    - list:\n      - listitem\n  - generic [ref=e2] [scrollable]:\n    - text: "${body}"\n    - text: "${"댓글입니다 ".repeat(60)}"` });
   assert.equal(result.status, "read");
