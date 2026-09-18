@@ -6,6 +6,11 @@ import {
   type Session,
 } from "@supabase/supabase-js";
 import {
+  cleanAuthCallbackUrl,
+  parseAuthCallback,
+  restoreBrowserSession,
+} from "@/lib/browser-auth";
+import {
   ArrowUpRight,
   ArrowRight,
   BookOpen,
@@ -176,12 +181,15 @@ export function Workspace() {
         setConfig(c);
         if (c.supabaseUrl && c.supabaseAnonKey) {
           const sb = createClient(c.supabaseUrl, c.supabaseAnonKey, {
-            auth: { storageKey: "ai-atlas-auth" },
+            auth: {
+              storageKey: "ai-atlas-auth",
+              persistSession: true,
+              autoRefreshToken: true,
+              detectSessionInUrl: false,
+              storage: window.localStorage,
+            },
           });
           setClient(sb);
-          const { data } = await sb.auth.getSession();
-          if (!live) return;
-          setSession(data.session);
           const {
             data: { subscription },
           } = sb.auth.onAuthStateChange((event, s) => {
@@ -190,6 +198,36 @@ export function Workspace() {
               setSelected(null);
           });
           sub = () => subscription.unsubscribe();
+          const callback = parseAuthCallback(window.location.href);
+          try {
+            const restored = await restoreBrowserSession(
+              sb,
+              window.location.href,
+            );
+            if (!live) return;
+            setSession(restored.session);
+            if (restored.callback) {
+              window.history.replaceState(
+                null,
+                "",
+                cleanAuthCallbackUrl(window.location.href),
+              );
+              if (restored.session) notify("내 자료실에 연결했습니다.");
+            }
+          } catch (authError) {
+            if (!live) return;
+            setSession(null);
+            setDialog("auth");
+            setAuthMessage(
+              "로그인 링크가 만료되었거나 이미 사용되었습니다. 새 로그인 링크를 받아 다시 시도해 주세요.",
+            );
+            if (callback)
+              window.history.replaceState(
+                null,
+                "",
+                cleanAuthCallbackUrl(window.location.href),
+              );
+          }
         }
         setAuthReady(true);
       })
