@@ -114,9 +114,9 @@ body .resource-card .cover-0 { background-color: #e7eddf; color: #48623e; }
 body .resource-card .cover-1 { background-color: #f0e5d5; color: #7b5b36; }
 body .resource-card .cover-2 { background-color: #e3e9e9; color: #426262; }
 body .resource-card .cover-3 { background-color: #e9e5ed; color: #685573; }
-body .resource-card .cover-label { font-size: 10px; font-weight: 600; }
+body .resource-card .cover-label { font-size: 11px; font-weight: 600; opacity: 1; }
 body .resource-card .cover-step > span { border: 1px solid currentColor; border-color: #a3ae944d; background: #fffefa99; border-radius: 3px; padding: 9px 7px; font-size: 12px; box-shadow: none; }
-body .resource-card .cover-bottom { font-size: 10px; }
+body .resource-card .cover-bottom { font-size: 11px; opacity: 1; }
 .cover::before,.cover::after { display: none; }
 .card-body { padding: 20px; }
 body .resource-card .card-body h2 { font-size: 17px; letter-spacing: -.5px; margin-block: 12px 9px; font-weight: 600; }
