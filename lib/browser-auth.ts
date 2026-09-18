@@ -4,16 +4,75 @@ const sessionBackupKey = "ai-atlas-auth-backup";
 
 type SessionStorage = Pick<Storage, "getItem" | "setItem" | "removeItem">;
 
-function browserStorage(): SessionStorage | null {
-  if (typeof window === "undefined") return null;
-  try {
-    return window.localStorage;
-  } catch {
-    return null;
-  }
+const cookieChunkSize = 2800;
+
+function cookieName(key: string) {
+  return `aa_${key.replace(/[^a-zA-Z0-9_-]/g, "_")}`;
 }
 
-function saveSessionBackup(session: Session, storage = browserStorage()) {
+function readCookie(name: string) {
+  if (typeof document === "undefined") return null;
+  const prefix = `${name}=`;
+  const item = document.cookie
+    .split("; ")
+    .find((part) => part.startsWith(prefix));
+  return item ? item.slice(prefix.length) : null;
+}
+
+function expireCookie(name: string) {
+  document.cookie = `${name}=; Path=/; Max-Age=0; SameSite=Lax; Secure`;
+}
+
+export function createBrowserAuthStorage(): SessionStorage | null {
+  if (typeof window === "undefined") return null;
+  return {
+    getItem(key) {
+      try {
+        const local = window.localStorage.getItem(key);
+        if (local) return local;
+      } catch {}
+      const base = cookieName(key);
+      const count = Number(readCookie(`${base}_n`) || "0");
+      if (!Number.isInteger(count) || count < 1 || count > 20) return null;
+      const chunks = Array.from({ length: count }, (_, index) =>
+        readCookie(`${base}_${index}`),
+      );
+      if (chunks.some((chunk) => chunk === null)) return null;
+      try {
+        return decodeURIComponent(chunks.join(""));
+      } catch {
+        return null;
+      }
+    },
+    setItem(key, value) {
+      try {
+        window.localStorage.setItem(key, value);
+      } catch {}
+      const base = cookieName(key);
+      const previous = Number(readCookie(`${base}_n`) || "0");
+      for (let index = 0; index < previous; index++)
+        expireCookie(`${base}_${index}`);
+      const encoded = encodeURIComponent(value);
+      const chunks = encoded.match(new RegExp(`.{1,${cookieChunkSize}}`, "g")) || [];
+      chunks.forEach((chunk, index) => {
+        document.cookie = `${base}_${index}=${chunk}; Path=/; Max-Age=2592000; SameSite=Lax; Secure`;
+      });
+      document.cookie = `${base}_n=${chunks.length}; Path=/; Max-Age=2592000; SameSite=Lax; Secure`;
+    },
+    removeItem(key) {
+      try {
+        window.localStorage.removeItem(key);
+      } catch {}
+      const base = cookieName(key);
+      const count = Number(readCookie(`${base}_n`) || "0");
+      for (let index = 0; index < count; index++)
+        expireCookie(`${base}_${index}`);
+      expireCookie(`${base}_n`);
+    },
+  };
+}
+
+function saveSessionBackup(session: Session, storage = createBrowserAuthStorage()) {
   if (!storage) return;
   storage.setItem(
     sessionBackupKey,
@@ -24,7 +83,7 @@ function saveSessionBackup(session: Session, storage = browserStorage()) {
   );
 }
 
-function readSessionBackup(storage = browserStorage()) {
+function readSessionBackup(storage = createBrowserAuthStorage()) {
   if (!storage) return null;
   try {
     const value = JSON.parse(storage.getItem(sessionBackupKey) || "null");
@@ -39,7 +98,7 @@ function readSessionBackup(storage = browserStorage()) {
   return null;
 }
 
-export function clearBrowserSessionBackup(storage = browserStorage()) {
+export function clearBrowserSessionBackup(storage = createBrowserAuthStorage()) {
   storage?.removeItem(sessionBackupKey);
 }
 
@@ -92,7 +151,7 @@ export function cleanAuthCallbackUrl(input: string) {
 export async function restoreBrowserSession(
   client: SupabaseClient,
   href: string,
-  storage = browserStorage(),
+  storage = createBrowserAuthStorage(),
 ): Promise<{ session: Session | null; callback: boolean }> {
   const callback = parseAuthCallback(href);
   if (callback?.kind === "error") throw new Error(callback.message);

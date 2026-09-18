@@ -8,6 +8,7 @@ import {
 import {
   clearBrowserSessionBackup,
   cleanAuthCallbackUrl,
+  createBrowserAuthStorage,
   parseAuthCallback,
   restoreBrowserSession,
 } from "@/lib/browser-auth";
@@ -181,13 +182,14 @@ export function Workspace() {
         if (!live) return;
         setConfig(c);
         if (c.supabaseUrl && c.supabaseAnonKey) {
+          const authStorage = createBrowserAuthStorage();
           const sb = createClient(c.supabaseUrl, c.supabaseAnonKey, {
             auth: {
               storageKey: "ai-atlas-auth",
               persistSession: true,
               autoRefreshToken: true,
               detectSessionInUrl: false,
-              storage: window.localStorage,
+              storage: authStorage || undefined,
             },
           });
           setClient(sb);
@@ -204,6 +206,7 @@ export function Workspace() {
             const restored = await restoreBrowserSession(
               sb,
               window.location.href,
+              authStorage,
             );
             if (!live) return;
             setSession(restored.session);
