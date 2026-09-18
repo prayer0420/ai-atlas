@@ -484,11 +484,18 @@ export function Workspace() {
     setAuthMessage("");
     const form = new FormData(e.currentTarget);
     const creds = {
-      email: String(form.get("email")).trim(),
+      username: String(form.get("username")).trim(),
       password: String(form.get("password")),
     };
     try {
-      const { data, error } = await client.auth.signInWithPassword(creds);
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(creds),
+      });
+      const tokens = await response.json();
+      if (!response.ok) throw new Error(tokens.error || "로그인하지 못했습니다.");
+      const { data, error } = await client.auth.setSession(tokens);
       if (error) throw error;
       if (data.session) {
         setDialog(null);
@@ -498,7 +505,7 @@ export function Workspace() {
       const msg = (e as Error).message;
       setAuthMessage(
         msg.includes("Invalid login")
-          ? "이메일 또는 비밀번호를 확인해 주세요."
+          ? "아이디 또는 비밀번호를 확인해 주세요."
           : msg.includes("Email not confirmed")
             ? "계정 설정 확인이 필요합니다. 운영자에게 문의해 주세요."
             : msg,
@@ -685,15 +692,15 @@ export function Workspace() {
             }
           >
             <span className="avatar">
-              {session?.user.email?.[0]?.toUpperCase() || "A"}
+              A
             </span>
             <span>
               <strong>{session ? "나의 자료실" : "체험 자료실"}</strong>
               <small>
-                {session?.user.email || "로그인하고 나만의 자료 모으기"}
+                {session ? "개인 계정 설정" : "로그인하고 나만의 자료 모으기"}
               </small>
             </span>
-            {session ? <LogOut size={16} /> : <LogIn size={16} />}
+            {session ? <Settings2 size={16} /> : <LogIn size={16} />}
           </button>
         </div>
       </aside>
@@ -815,7 +822,7 @@ export function Workspace() {
               {view === "settings" ? (
                 <div className="settings-grid">
                   {session && client && (
-                    <PasswordSettings key={session.user.id} client={client} email={session.user.email || ""} />
+                    <PasswordSettings key={session.user.id} client={client} />
                   )}
                   {session && (
                     <section className="setting-card full">
@@ -1252,16 +1259,20 @@ export function Workspace() {
                 <BookOpen size={25} />
               </span>
               <h2>내 자료실 로그인</h2>
-              <p>로그인 ID와 비밀번호로 바로 들어오세요. 이메일 인증은 필요하지 않습니다.</p>
+              <p>아이디와 비밀번호로 내 자료실을 열어보세요.</p>
               <form onSubmit={auth}>
-                <label htmlFor="email">로그인 ID (기존 이메일)</label>
+                <label htmlFor="username">아이디</label>
                 <input
-                  id="email"
-                  name="email"
-                  type="email"
+                  id="username"
+                  name="username"
+                  type="text"
                   autoComplete="username"
+                  autoCapitalize="none"
+                  spellCheck={false}
+                  minLength={3}
+                  maxLength={30}
                   required
-                  placeholder="name@example.com"
+                  placeholder="아이디 입력"
                 />
                     <label htmlFor="password">비밀번호</label>
                     <input

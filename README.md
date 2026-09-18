@@ -11,7 +11,7 @@
 - 기본 Ollama 로컬 AI의 구조화된 응답으로 학습 목표·요약·상세 설명·개념도·비교표·용어·실습·복습 문제 작성
 - 원문 기반 설명과 보충 설명 구분, 주의사항과 출처 유지
 - 개념도 PNG 저장, 학습 노트 Markdown 내보내기
-- Supabase 이메일 링크 로그인·이메일/비밀번호 인증, 사용자별 RLS 정책, 일일 분석 제한과 중복 실행 방지
+- 아이디·비밀번호 로그인, Supabase 계정 연결과 사용자별 RLS 정책, 일일 분석 제한과 중복 실행 방지
 - 반응형 화면, 키보드로 조작 가능한 모달·폼, 모션 감소 설정 지원
 
 ## 현재 상태
@@ -21,7 +21,7 @@
 - Vercel 프로젝트: `ai-atlas` / `prayer-s-projects12`
 - Supabase: `DC_proj`의 `ai_atlas_*` 전용 테이블
 - 자동 배포 브랜치: `codex/initial-build`
-- 소스: [비공개 GitHub 저장소](https://github.com/prayer0420/ai-atlas)
+- 소스: [GitHub 저장소](https://github.com/prayer0420/ai-atlas)
 - 일반 사용법: [사용 안내](./USER_GUIDE.md)
 
 로그인 전 보이는 자료는 **체험용으로 미리 작성한 예시**입니다. 실제 저장된 사용자 자료나 실시간 AI 분석 결과가 아닙니다.
