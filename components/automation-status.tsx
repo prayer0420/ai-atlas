@@ -168,8 +168,12 @@ export function AutomationStatus({
               ? "자동 정리 일시 중지"
               : data.online
                 ? data.worker?.busy
-                  ? "무료 AI가 정리하고 있어요"
-                  : "무료 AI 연결됨"
+                  ? data.provider === "hermes"
+                    ? "연결한 AI가 정리하고 있어요"
+                    : "무료 AI가 정리하고 있어요"
+                  : data.provider === "hermes"
+                    ? "Hermes AI 연결됨"
+                    : "무료 AI 연결됨"
                 : "PC 연결 대기"}
         </strong>
         <span>
