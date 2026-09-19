@@ -23,6 +23,7 @@ type Job = {
   } | null;
 };
 type State = {
+  provider: "ollama" | "hermes";
   online: boolean;
   pending: number;
   paused: boolean;
@@ -121,6 +122,21 @@ export function AutomationStatus({
       setBusy(false);
     }
   }
+  async function selectProvider(provider: "ollama" | "hermes") {
+    setBusy(true);
+    setError("");
+    try {
+      await api("/api/automation", {
+        method: "POST",
+        body: JSON.stringify({ provider }),
+      });
+      await load();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
   async function collect(channel: CaptureChannel) {
     setBusy(true);
     setError("");
@@ -169,7 +185,7 @@ export function AutomationStatus({
           닫아도 요청은 보관됩니다.
         </p>
         <div className="automation-facts">
-          <span>API 사용료 0원 · {data?.worker?.model || "로컬 AI"}</span>
+          <span>{data?.provider === "hermes" ? "Hermes 연결 프로바이더" : "무료 Ollama"} · {data?.worker?.model || "연결 확인 중"}</span>
           <span>한 번에 한 작업 · 오류 시 최대 3회 시도</span>
           <span>
             {data?.worker?.vault_synced_at
@@ -177,6 +193,21 @@ export function AutomationStatus({
               : "Obsidian 자동 저장 대기"}
           </span>
         </div>
+        <section className="manual-collection" aria-labelledby="ai-provider-title">
+          <div>
+            <strong id="ai-provider-title">학습 AI 선택</strong>
+            <p>새 작업부터 적용됩니다. Hermes는 PC에 이미 연결한 ChatGPT/Codex 프로바이더를 사용하며 인증정보는 홈페이지로 전송하지 않습니다.</p>
+          </div>
+          <div className="collection-actions" role="group" aria-label="학습 AI 선택">
+            <button className={data?.provider === "ollama" ? "button primary" : "button secondary"} disabled={busy || !data} onClick={() => selectProvider("ollama")}>
+              {data?.provider === "ollama" && <CheckCircle2 size={16} />} Ollama
+            </button>
+            <button className={data?.provider === "hermes" ? "button primary" : "button secondary"} disabled={busy || !data} onClick={() => selectProvider("hermes")}>
+              {data?.provider === "hermes" && <CheckCircle2 size={16} />} 연결한 프로바이더
+            </button>
+          </div>
+          <small>{data?.provider === "hermes" ? "현재: Hermes의 openai-codex / gpt-6-astra 연결을 사용합니다." : "현재: PC의 Ollama 모델을 사용합니다."}</small>
+        </section>
         <section className="manual-collection" aria-labelledby="manual-collection-title">
           <div>
             <strong id="manual-collection-title">지금 새 자료 가져오기</strong>

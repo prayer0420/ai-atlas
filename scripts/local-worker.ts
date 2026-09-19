@@ -3,7 +3,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import { admin, checkDb, AppError } from "../lib/server";
 import { ensureOwner, aiProblem } from "../lib/brain-ai";
-import { localModel } from "../lib/local-ai";
+import { providerReady, selectedModel } from "../lib/local-ai";
 import { enqueue } from "../lib/automation";
 import { runDaily } from "../lib/daily";
 import { compileWiki } from "../lib/wiki";
@@ -41,7 +41,7 @@ async function heartbeat(extra: Record<string, unknown> = {}) {
         .from("ai_atlas_workers")
         .upsert({
           user_id: ownerId,
-          model: localModel(),
+          model: selectedModel(),
           last_seen: new Date().toISOString(),
           engine_ready: engineReady,
           busy,
@@ -72,20 +72,6 @@ async function heartbeat(extra: Record<string, unknown> = {}) {
         .eq("id", current.payload.resourceId)
         .eq("user_id", ownerId)
         .eq("status", "analyzing");
-  }
-}
-async function ready() {
-  try {
-    const result = await fetch("http://127.0.0.1:11434/api/tags", {
-      signal: AbortSignal.timeout(4000),
-    });
-    const data = await result.json();
-    return (
-      data.models?.some((m: { name: string }) => m.name === localModel()) ||
-      false
-    );
-  } catch {
-    return false;
   }
 }
 async function sync() {
@@ -149,14 +135,16 @@ async function catchUp() {
   if (!prior.data?.length) await enqueue(ownerId, "daily", {}, date);
 }
 async function tick() {
-  engineReady = await ready();
-  await heartbeat();
   const control = await db
     .from("ai_atlas_preferences")
-    .select("local_paused")
+    .select("local_paused,ai_provider")
     .eq("user_id", ownerId)
     .maybeSingle();
   checkDb(control.error);
+  process.env.ATLAS_AI_PROVIDER =
+    control.data?.ai_provider === "hermes" ? "hermes" : "ollama";
+  engineReady = await providerReady();
+  await heartbeat();
   if (control.data?.local_paused) return;
   if (process.env.ATLAS_INBOX_PATH) {
     const imported = await importInbox(ownerId, process.env.ATLAS_INBOX_PATH);

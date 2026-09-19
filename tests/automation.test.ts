@@ -11,7 +11,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PGlite } from "@electric-sql/pglite";
 import { syncLocalVault } from "../lib/vault-sync";
-import { localStructured } from "../lib/local-ai";
+import { localStructured, parseHermesJson } from "../lib/local-ai";
 import { z } from "zod";
 import { cardSvg } from "../lib/card-image";
 import { formatDaily } from "../lib/daily-format";
@@ -28,6 +28,7 @@ test("Local queue isolates users, deduplicates work, recovers expired leases, an
       "20260917154144_atlas_daily_wiki.sql",
       "202609180001_local_automation.sql",
       "20260918233654_manual_analysis_unlimited.sql",
+      "20260918235945_ai_provider_preference.sql",
     ])
       await db.exec(
         await readFile(
@@ -134,6 +135,13 @@ test("Local queue isolates users, deduplicates work, recovers expired leases, an
   } finally {
     await db.close();
   }
+});
+test("Hermes provider output accepts plain or fenced JSON and rejects prose-only output", () => {
+  assert.deepEqual(parseHermesJson('{"answer":"ok"}'), { answer: "ok" });
+  assert.deepEqual(parseHermesJson('```json\n{"answer":"ok"}\n```'), {
+    answer: "ok",
+  });
+  assert.throws(() => parseHermesJson("완료했습니다"), /no JSON object/);
 });
 test("Local inference consumes split streaming JSON, preserves Korean UTF-8, and never calls a paid provider", async () => {
   const original = globalThis.fetch;

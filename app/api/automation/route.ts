@@ -33,7 +33,7 @@ export async function GET(req: NextRequest) {
         .in("status", ["queued", "running"]),
       db
         .from("ai_atlas_preferences")
-        .select("local_paused")
+        .select("local_paused,ai_provider")
         .eq("user_id", user.id)
         .maybeSingle(),
     ]);
@@ -43,6 +43,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json(
       {
         mode: localMode() ? "local" : "cloud",
+        provider: preferences.data?.ai_provider || "ollama",
         paused: preferences.data?.local_paused || false,
         worker: worker.data,
         online: Boolean(
@@ -63,6 +64,17 @@ export async function POST(req: NextRequest) {
     const { db, user } = await authenticate(req);
     ensureOwner(user.email);
     const input = await body(req);
+    const provider = z.enum(["ollama", "hermes"]).safeParse(input.provider);
+    if (provider.success) {
+      checkDb(
+        (
+          await admin()
+            .from("ai_atlas_preferences")
+            .upsert({ user_id: user.id, ai_provider: provider.data })
+        ).error,
+      );
+      return NextResponse.json({ ok: true, provider: provider.data });
+    }
     if (typeof input.paused === "boolean") {
       checkDb(
         (
