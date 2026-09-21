@@ -1,6 +1,7 @@
 import { admin, checkDb, AppError, dailyLimit } from "./server";
 import { extract } from "./extract";
 import { createLesson } from "./analyze";
+import { readableText, sourceProblem } from "./content-text";
 export async function analyzeResource(ownerId: string, id: string, manual = false) {
   let jobId: string | undefined;
   let resourceId: string | undefined;
@@ -56,7 +57,7 @@ export async function analyzeResource(ownerId: string, id: string, manual = fals
     checkDb(claimedError);
     if (!claimed)
       throw new AppError("자료가 변경되어 분석을 중단했습니다.", 409);
-    let text = claimed.raw_text as string;
+    let text = readableText(claimed.raw_text as string);
     let method = claimed.source_method as string | null;
     if (text.trim().length < 80 || method === "feed_preview") {
       if (!claimed.source_url)
@@ -74,6 +75,8 @@ export async function analyzeResource(ownerId: string, id: string, manual = fals
         .eq("analysis_job_id", jobId);
       checkDb(saveError);
     }
+    const problem = sourceProblem(text);
+    if (problem) throw new AppError(problem, 422);
     const { lesson, model, usage } = await createLesson(
       text,
       claimed.source_url,
@@ -126,9 +129,6 @@ export async function analyzeResource(ownerId: string, id: string, manual = fals
         name: candidate.name,
         status: candidate.status,
         code: candidate.code,
-        detail: candidate.message
-          ?.slice(0, 800)
-          .replace(/(?:sk-[\w-]+|eyJ[\w.-]{50,})/g, "[redacted]"),
       });
       problem = new AppError(
         candidate.status === 429

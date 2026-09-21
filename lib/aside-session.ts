@@ -1,5 +1,6 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { randomUUID } from "node:crypto";
+import { providerEnvironment } from "./provider-env";
 
 /** One interactive REPL keeps owned listing tabs alive across pagination steps. */
 export class AsideSession {
@@ -8,7 +9,7 @@ export class AsideSession {
   private pending?: { marker?: string; resolve: (value: unknown) => void; reject: (e: Error) => void; timer: NodeJS.Timeout };
   private ready: Promise<unknown>;
   constructor(executable: string) {
-    this.child = spawn(executable, ["repl", "--account", "u0", "--host", "local"], { windowsHide: true });
+    this.child = spawn(executable, ["repl", "--account", "u0", "--host", "local"], { windowsHide: true, env: providerEnvironment(process.env) });
     this.ready = this.wait();
     this.child.stdout.on("data", (chunk) => { this.buffer += String(chunk).replace(/\x1b\[[0-9;]*m/g, ""); this.flush(); });
     this.child.stderr.on("data", () => {});

@@ -5,6 +5,7 @@ import { z } from "zod";
 import { admin, checkDb } from "./server";
 import { sourceType, validateUrl } from "./extract";
 import { enqueue } from "./automation";
+import { readableText } from "./content-text";
 export const captureSchema = z.object({
   items: z
     .array(
@@ -76,7 +77,7 @@ export async function importInbox(
             .from("ai_atlas_resources")
             .insert({
               user_id: userId,
-              title: item.title,
+              title: readableText(item.title).split("\n")[0].slice(0, 120),
               source_url: item.url,
               source_type: sourceType(item.url),
               raw_text: item.text,

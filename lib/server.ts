@@ -38,14 +38,32 @@ export async function authenticate(req: NextRequest) {
   const { data, error } = await db.auth.getUser(token);
   if (error || !data.user)
     throw new AppError("로그인이 만료되었습니다. 다시 로그인해 주세요.", 401);
+  const allowed = (process.env.ALLOWED_EMAILS || "").split(",").map(x => x.trim().toLowerCase()).filter(Boolean);
+  if (!data.user.email || !allowed.includes(data.user.email.toLowerCase()))
+    throw new AppError("이 자료실에 접근할 수 없는 계정입니다.", 403);
   return { db, user: data.user };
 }
 export async function body(req: NextRequest) {
   const len = Number(req.headers.get("content-length") || 0);
   if (len > 300000) throw new AppError("입력한 내용이 너무 큽니다.", 413);
-  const text = await req.text();
-  if (Buffer.byteLength(text) > 300000)
-    throw new AppError("입력한 내용이 너무 큽니다.", 413);
+  // Enforce the limit while streaming even when Content-Length is omitted.
+  const reader = req.body?.getReader();
+  if (!reader) throw new AppError("입력 형식을 확인해 주세요.");
+  const chunks: Uint8Array[] = [];
+  let bytes = 0;
+  try {
+    while (true) {
+      const part = await reader.read();
+      if (part.done) break;
+      bytes += part.value.byteLength;
+      if (bytes > 300000) {
+        await reader.cancel();
+        throw new AppError("입력한 내용이 너무 큽니다.", 413);
+      }
+      chunks.push(part.value);
+    }
+  } finally { reader.releaseLock(); }
+  const text = Buffer.concat(chunks).toString("utf8");
   try {
     return JSON.parse(text);
   } catch {

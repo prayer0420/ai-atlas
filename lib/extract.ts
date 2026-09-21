@@ -5,6 +5,7 @@ import http from "node:http";
 import * as cheerio from "cheerio";
 import { AppError } from "./server";
 import { youtubeTranscript } from "./youtube";
+import { readableText, sourceProblem } from "./content-text";
 const blocked = new BlockList();
 for (const [ip, mask] of [
   ["0.0.0.0", 8],
@@ -38,6 +39,8 @@ export function isPublicAddress(ip: string) {
   return false;
 }
 export function validateUrl(raw: string) {
+  if (/(?:\s|%20|%0a|%0d)https?:\/\//i.test(raw))
+    throw new AppError("주소가 여러 개 붙어 있습니다. 자료 한 건에는 링크 하나만 입력해 주세요.");
   let u: URL;
   try {
     u = new URL(raw);
@@ -202,13 +205,20 @@ export async function extract(url: string) {
       "이 소셜 링크는 게시물 본문이 필요합니다. 원문·출처 탭에서 내용을 붙여넣고 다시 분석해 주세요.",
       422,
     );
-  const page = await safeFetch(url);
-  if (page.type.includes("text/plain"))
+  const target = validateUrl(url);
+  const docId = target.hostname === "docs.google.com" && target.pathname.match(/^\/document\/d\/([\w-]+)(?:\/|$)/)?.[1];
+  // Public Google Docs has a text export; reading its editor chrome is not analysis.
+  const page = await safeFetch(docId ? `https://docs.google.com/document/d/${docId}/export?format=txt` : url);
+  if (page.type.includes("text/plain")) {
+    const text = readableText(page.text).slice(0, 60000);
+    const problem = sourceProblem(text);
+    if (problem) throw new AppError(problem, 422);
     return {
-      text: page.text.slice(0, 60000),
+      text,
       title: "웹 텍스트",
-      method: "web",
+      method: docId ? "google_docs_text" : "web",
     };
+  }
   const $ = cheerio.load(page.text);
   // Readability extracts article text only; no scripts or linked resources run.
   try {
@@ -218,9 +228,9 @@ export async function extract(url: string) {
     ]);
     const { document } = parseHTML(page.text);
     const article = new Readability(document as unknown as Document).parse();
-    if (article?.textContent && article.textContent.trim().length >= 200)
+    if (article?.textContent && article.textContent.trim().length >= 200 && !sourceProblem(article.textContent))
       return {
-        text: article.textContent.trim().slice(0, 60000),
+        text: readableText(article.textContent).slice(0, 60000),
         title: (article.title || "웹 아티클").slice(0, 120),
         method: "readability",
       };
@@ -236,15 +246,17 @@ export async function extract(url: string) {
       ? $("main").first()
       : $("body");
   root.find("p,h1,h2,h3,h4,li,br").after("\n");
-  const text = root
+  const text = readableText(root
     .text()
     .replace(/[ \t]+/g, " ")
     .replace(/\n\s*\n/g, "\n\n")
     .trim()
-    .slice(0, 60000);
-  if (text.length < 200)
+    .slice(0, 60000));
+  if (text.length < 200 || sourceProblem(text))
     throw new AppError(
-      "충분한 본문을 읽지 못했습니다. 원문·출처 탭에 본문을 추가해 주세요.",
+      /(^|\.)(notion\.site|notion\.so|notion\.com)$/.test(target.hostname)
+        ? "Notion 링크의 본문을 읽지 못했습니다. 공개 공유 여부를 확인하거나 원문·출처에 내용을 붙여넣어 주세요. 빈 화면으로 분석하지 않았습니다."
+        : sourceProblem(text) || "충분한 본문을 읽지 못했습니다. 원문·출처 탭에 본문을 추가해 주세요.",
       422,
     );
   return { text, title: title.trim().slice(0, 120), method: "web" };

@@ -1,6 +1,7 @@
 /** A labelled excerpt, never an invented AI summary. Full text stays in the note. */
+import { readableText } from "./content-text";
 export function readingExcerpt(text: string, limit = 160) {
-  const clean = text.replace(/\s+/g, " ").trim();
+  const clean = readableText(text).replace(/\s+/g, " ").trim();
   if (clean.length <= limit) return clean;
   const sentence = clean.match(/^.*?[.!?。](?=\s|$)/)?.[0];
   if (sentence && sentence.length <= limit) return sentence;

@@ -114,7 +114,6 @@ export function Workspace() {
   const [dialog, setDialog] = useState<"add" | "auth" | null>(null);
   const [authMessage, setAuthMessage] = useState("");
   const [authBusy, setAuthBusy] = useState(false);
-  const [setupMode, setSetupMode] = useState(false);
   const [addType, setAddType] = useState("link");
   const [addUrl, setAddUrl] = useState("");
   const [addText, setAddText] = useState("");
@@ -515,28 +514,6 @@ export function Workspace() {
     } finally {
       setAuthBusy(false);
     }
-  }
-  async function setupPassword(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    setAuthBusy(true);
-    setAuthMessage("");
-    const form = new FormData(e.currentTarget);
-    const password = String(form.get("setup-password"));
-    const confirm = String(form.get("setup-password-confirm"));
-    if (password.length < 8 || password !== confirm) {
-      setAuthMessage("8자 이상의 비밀번호를 두 칸에 동일하게 입력해 주세요.");
-      setAuthBusy(false);
-      return;
-    }
-    try {
-      const response = await fetch("/api/auth/setup", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ username: String(form.get("setup-username")).trim(), password }) });
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.error);
-      setSetupMode(false);
-      setAuthMessage("비밀번호를 설정했습니다. 아이디와 방금 정한 비밀번호로 로그인해 주세요.");
-      e.currentTarget.reset();
-    } catch (error) { setAuthMessage((error as Error).message); }
-    finally { setAuthBusy(false); }
   }
   async function trash() {
     if (!selected) return;
@@ -1282,21 +1259,8 @@ export function Workspace() {
               <span className="modal-symbol">
                 <BookOpen size={25} />
               </span>
-              <h2>{setupMode ? "처음 비밀번호 설정" : "내 자료실 로그인"}</h2>
-              <p>{setupMode ? "아이디를 확인하고 사용할 비밀번호를 직접 정하세요." : "아이디와 비밀번호로 내 자료실을 열어보세요."}</p>
-              {setupMode ? (
-                <form onSubmit={setupPassword}>
-                  <label htmlFor="setup-username">아이디</label>
-                  <input id="setup-username" name="setup-username" type="text" autoComplete="username" autoCapitalize="none" spellCheck={false} minLength={3} maxLength={30} required defaultValue="atlas" />
-                  <label htmlFor="setup-password">새 비밀번호</label>
-                  <input id="setup-password" name="setup-password" type="password" autoComplete="new-password" minLength={8} maxLength={128} required placeholder="8자 이상 입력" />
-                  <label htmlFor="setup-password-confirm">비밀번호 확인</label>
-                  <input id="setup-password-confirm" name="setup-password-confirm" type="password" autoComplete="new-password" minLength={8} maxLength={128} required placeholder="한 번 더 입력" />
-                  {authMessage && <div className="notice" role="status">{authMessage}</div>}
-                  <button className="primary-button full-width" disabled={authBusy}>{authBusy ? <LoaderCircle className="spin" size={18} /> : <KeyRound size={18} />} 비밀번호 설정</button>
-                  <button type="button" className="text-button" onClick={() => { setSetupMode(false); setAuthMessage(""); }}>로그인으로 돌아가기</button>
-                </form>
-              ) : (
+              <h2>내 자료실 로그인</h2>
+              <p>아이디와 비밀번호로 내 자료실을 열어보세요.</p>
                 <form onSubmit={auth}>
                   <label htmlFor="username">아이디</label>
                   <input id="username" name="username" type="text" autoComplete="username" autoCapitalize="none" spellCheck={false} minLength={3} maxLength={30} required placeholder="아이디 입력" />
@@ -1304,10 +1268,8 @@ export function Workspace() {
                   <input id="password" name="password" type="password" autoComplete="current-password" minLength={8} required placeholder="8자 이상 입력" />
                   {authMessage && <div className="notice" role="status">{authMessage}</div>}
                   <button className="primary-button full-width" disabled={!client || authBusy}>{authBusy ? <LoaderCircle className="spin" size={18} /> : <LogIn size={18} />} 로그인</button>
-                  <button type="button" className="text-button" onClick={() => { setSetupMode(true); setAuthMessage(""); }}>처음 비밀번호 설정</button>
                 </form>
-              )}
-              <p className="small-copy">개인 전용 자료실입니다. 최초 설정은 한 번만 가능합니다.</p>
+              <p className="small-copy">개인 전용 자료실입니다. 비밀번호 변경은 로그인한 계정의 연결 설정에서 할 수 있습니다.</p>
               {!config?.database && (
                 <p className="small-copy">
                   저장소 연결 작업이 완료되면 내 자료실을 이용할 수 있어요.

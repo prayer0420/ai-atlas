@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { lessonCardsSchema } from "./lesson-cards";
 export const categories = [
   "AI 기초",
   "프롬프트",
@@ -10,6 +11,7 @@ export const categories = [
 ] as const;
 export const categorySchema = z.enum(categories);
 export const lessonSchema = z.object({
+  cards: lessonCardsSchema.optional(),
   title: z.string().min(1).max(120),
   summary: z.string().min(1).max(1200),
   category: categorySchema,

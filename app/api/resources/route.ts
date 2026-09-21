@@ -9,6 +9,7 @@ import {
   AppError,
 } from "@/lib/server";
 import { sourceType, validateUrl } from "@/lib/extract";
+import { readableValue } from "@/lib/content-text";
 export const dynamic = "force-dynamic";
 export async function GET(req: NextRequest) {
   try {
@@ -56,7 +57,7 @@ export async function GET(req: NextRequest) {
     const { data, error, count } = await q;
     checkDb(error);
     return NextResponse.json(
-      { resources: data, total: count },
+      { resources: readableValue(data), total: count },
       { headers: { "Cache-Control": "no-store" } },
     );
   } catch (e) {

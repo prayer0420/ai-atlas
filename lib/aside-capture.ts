@@ -3,6 +3,7 @@ import { promisify } from "node:util";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { providerEnvironment } from "./provider-env";
 import { captureSchema } from "./inbox";
 import { parseSocialPage, socialBrowserCode, socialUrl, type SocialPage, type SocialPlatform } from "./social-capture";
 const exec = promisify(execFile);
@@ -13,17 +14,17 @@ const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function runAside(executable: string, args: string[]) {
   try {
-    return await exec(executable, args, { timeout: 130_000, maxBuffer: 2_000_000, windowsHide: true });
+    return await exec(executable, args, { timeout: 130_000, maxBuffer: 2_000_000, windowsHide: true, env: providerEnvironment(process.env) });
   } catch (initialError) {
     // A timeout or script failure is not a reason to repeat collection six times.
     if (!/Aside isn.t running|daemon auth challenge|ECONNREFUSED/i.test(String((initialError as { stderr?: string }).stderr || initialError))) throw initialError;
-    const browser = spawn(asideBrowser, [], { detached: true, stdio: "ignore", windowsHide: true });
+    const browser = spawn(asideBrowser, [], { detached: true, stdio: "ignore", windowsHide: true, env: providerEnvironment(process.env) });
     browser.unref();
     let lastError: unknown;
     for (let attempt = 0; attempt < 2; attempt++) {
       await wait(3_000);
       try {
-        return await exec(executable, args, { timeout: 130_000, maxBuffer: 2_000_000, windowsHide: true });
+        return await exec(executable, args, { timeout: 130_000, maxBuffer: 2_000_000, windowsHide: true, env: providerEnvironment(process.env) });
       } catch (error) { lastError = error; }
     }
     throw lastError;

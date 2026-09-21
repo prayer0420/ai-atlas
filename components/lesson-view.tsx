@@ -19,6 +19,8 @@ import type { Resource } from "@/lib/types";
 import { sourceNames, categories } from "@/lib/types";
 import { Diagram } from "./diagram";
 import { readingExcerpt } from "@/lib/reading";
+import { readableText, readableValue } from "@/lib/content-text";
+import { LessonCards } from "./lesson-cards";
 export function LessonView({
   resource: r,
   onBack,
@@ -39,14 +41,21 @@ export function LessonView({
   const [tab, setTab] = useState("brief");
   const [answers, setAnswers] = useState<Record<number, number>>({});
   const [notes, setNotes] = useState(r.notes);
-  const [raw, setRaw] = useState(r.raw_text);
+  const [raw, setRaw] = useState(readableText(r.raw_text));
   const [editTitle, setEditTitle] = useState(r.title);
   const [editCategory, setEditCategory] = useState(r.category);
   const [editTags, setEditTags] = useState(r.tags.join(", "));
   const [copied, setCopied] = useState(false);
   const [saved, setSaved] = useState(false);
-  const l = r.lesson;
-  useEffect(() => setRaw(r.raw_text), [r.raw_text]);
+  const l = r.lesson ? readableValue(r.lesson) : null;
+  const [detailSection, setDetailSection] = useState<number | null>(null);
+  useEffect(() => {
+    if (tab === "learn" && detailSection !== null) {
+      document.getElementById(`section-${detailSection}`)?.scrollIntoView({ block: "start" });
+      setDetailSection(null);
+    }
+  }, [tab, detailSection]);
+  useEffect(() => setRaw(readableText(r.raw_text)), [r.raw_text]);
   useEffect(() => setNotes(r.notes), [r.notes]);
   useEffect(() => setEditTitle(r.title), [r.title]);
   useEffect(() => setEditCategory(r.category), [r.category]);
@@ -111,7 +120,7 @@ export function LessonView({
             </>
           )}
         </div>
-        <h1>{r.title}</h1>
+        <h1>{readableText(r.title)}</h1>
         <p className="detail-summary">
           {l
             ? readingExcerpt(l.summary, 160)
@@ -138,8 +147,8 @@ export function LessonView({
       </div>
       <nav className="tabs" aria-label="자료 읽기 방식">
         {[
-          ["brief", "핵심만 보기"],
-          ["learn", "상세 설명·실습"],
+          ["brief", "카드뉴스"],
+          ["learn", "상세분석"],
           ["source", "원문·출처"],
           ["memo", "나의 메모"],
         ].map(([id, label]) => (
@@ -157,78 +166,28 @@ export function LessonView({
         {tab === "brief" && (
           <div className="brief-layout">
             {l ? (
-              <>
-                <section className="brief-visual" aria-label="한눈에 보는 개념">
-                  <div className="brief-section-heading">
-                    <span>01 · 한 장으로 이해하기</span>
-                    <strong>시각 요약</strong>
-                  </div>
-                  <Diagram diagram={l.diagram} summary />
-                </section>
-                <section className="brief-essentials">
-                  <div className="brief-section-heading">
-                    <span>02 · 먼저 기억할 것</span>
-                    <h2>핵심 3가지</h2>
-                  </div>
-                  <ol>
-                    {l.takeaways.slice(0, 3).map((text, i) => (
-                      <li key={i}>
-                        <span aria-hidden="true">0{i + 1}</span>
-                        <p>{readingExcerpt(text, 170)}</p>
-                      </li>
-                    ))}
-                  </ol>
-                </section>
-                <section className="brief-caution">
-                  <strong>함께 기억할 주의점</strong>
-                  <p>{readingExcerpt(l.caveats[0], 220)}</p>
-                  <button
-                    className="text-button"
-                    onClick={() => setTab("learn")}
-                  >
-                    전체 설명과 주의점 확인
-                  </button>
-                </section>
-                <section className="brief-next">
-                  <div>
-                    <BookOpen size={23} />
-                    <h2>더 깊이 이해하고 싶다면</h2>
-                    <p>
-                      상세 설명·비교·실습을 이어 읽고, Wiki에서 다른 자료와
-                      연결하세요.
-                    </p>
-                  </div>
-                  <div className="brief-next-actions">
-                    <button className="primary-button" onClick={onWiki}>
-                      연결된 Wiki 읽기 <ArrowUpRight size={17} />
-                    </button>
-                    <button
-                      className="secondary-button"
-                      onClick={() => setTab("learn")}
-                    >
-                      상세 설명·실습
-                    </button>
-                  </div>
-                </section>
-              </>
+              <LessonCards key={r.id + r.updated_at} lesson={l} sourceUrl={r.source_url} onDetail={(section) => {
+                setTab("learn");
+                setDetailSection(section);
+              }} />
             ) : (
               <section className="brief-pending">
                 <BookOpen size={32} />
-                <h2>원문을 보관하고 있어요</h2>
-                <p>아직 핵심 요약과 개념도가 만들어지지 않았습니다.</p>
+                <h2>{r.status === "analyzing" ? "상세분석과 카드뉴스를 만들고 있어요" : r.status === "needs_content" ? "링크의 본문을 확보하지 못했어요" : r.status === "failed" ? "분석을 완료하지 못했어요" : "아직 카드뉴스가 만들어지지 않았어요"}</h2>
+                <p>{r.raw_text?.trim() ? `저장된 원문 ${readableText(r.raw_text).length.toLocaleString("ko-KR")}자를 바탕으로 분석합니다. 완료되면 카드뉴스와 상세분석이 함께 표시됩니다.` : "현재는 링크만 저장되어 있습니다. 본문 확보에 실패하면 내용을 추측해 채우지 않습니다."}</p>
                 <div className="brief-next-actions">
                   <button
                     className="primary-button"
                     onClick={() => setTab("source")}
                   >
-                    저장한 원문 읽기
+                    {r.raw_text?.trim() ? "저장한 원문 확인" : "본문 직접 추가"}
                   </button>
                   <button
                     className="secondary-button"
                     disabled={busy}
                     onClick={onAnalyze}
                   >
-                    {busy ? "분석 중…" : "핵심·개념도 만들기"}
+                    {busy ? "요청 중…" : r.status === "analyzing" ? "분석 상태 확인·재시도" : "카드뉴스·상세분석 만들기"}
                   </button>
                   <button className="text-button" onClick={onWiki}>
                     관련 Wiki 확인
