@@ -1,4 +1,10 @@
-import { createElement as h, type CSSProperties, type ReactNode } from "react";
+import {
+  createElement as h,
+  cloneElement,
+  isValidElement,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { createHash } from "node:crypto";
@@ -43,6 +49,7 @@ const text = (value: string, size: number, style: CSSProperties = {}) =>
     "div",
     {
       "data-card-text": true,
+      "data-card-note": style.bottom === 115,
       style: {
         display: "flex",
         flexDirection: "column",
@@ -55,13 +62,48 @@ const text = (value: string, size: number, style: CSSProperties = {}) =>
     value,
   );
 
+function fitScene(node: ReactNode, ratio: number): ReactNode {
+  if (!isValidElement<{ style?: CSSProperties; children?: ReactNode }>(node))
+    return node;
+  const style = { ...node.props.style };
+  for (const key of [
+    "fontSize",
+    "height",
+    "minHeight",
+    "gap",
+    "marginTop",
+    "marginBottom",
+    "paddingTop",
+    "paddingBottom",
+    "padding",
+  ] as const) {
+    const value = style[key];
+    if (typeof value === "number")
+      (style as Record<string, unknown>)[key] = Math.round(value * ratio);
+    else if (typeof value === "string" && key === "padding")
+      style.padding = value.replace(
+        /(\d+)px/g,
+        (_, n) => Math.round(Number(n) * ratio) + "px",
+      );
+  }
+  return cloneElement(
+    node,
+    { style },
+    ...(Array.isArray(node.props.children)
+      ? node.props.children
+      : [node.props.children]
+    ).map((child) => fitScene(child, ratio)),
+  );
+}
+
 /** A deterministic editorial renderer. It never claims to be a photo/image model. */
 export async function renderCard(
   card: StoryCard,
   index: number,
   brief: CardBrief,
-  compact = false,
+  fit = 0,
 ) {
+  const compact = fit > 0;
   const dark = card.layout === "statement";
   const accent = index % 2 ? blue : red;
   const bodySize =
@@ -86,7 +128,13 @@ export async function renderCard(
     style: CSSProperties = {},
   ) =>
     box(
-      { padding: 28, gap: 12, background: "#FFFDF7", color: ink, ...style },
+      {
+        padding: compact ? 20 : 28,
+        gap: compact ? 8 : 12,
+        background: "#FFFDF7",
+        color: ink,
+        ...style,
+      },
       text(x.label, compact ? 32 : 38, { fontWeight: 700 }),
       x.detail ? text(x.detail, compact ? 26 : 29) : null,
     );
@@ -96,11 +144,11 @@ export async function renderCard(
     case "statement":
       scene = box(
         {
-          height: card.condition ? 810 : 930,
+          height: card.condition ? 750 : 880,
           justifyContent: "center",
           gap: compact ? 46 : 70,
         },
-        text("“", 180, { color: red, height: 145, lineHeight: 1 }),
+        box({ width: 100, height: 10, background: red, marginBottom: 20 }),
         title,
         body,
       );
@@ -113,9 +161,10 @@ export async function renderCard(
           { flexDirection: "row", gap: 24, marginTop: 20 },
           ...card.items.map((x, i) =>
             item(x, i, {
-              width: 434,
-              minHeight: 340,
+              width: 452,
+              minHeight: compact ? 260 : 340,
               borderTop: `10px solid ${i ? blue : red}`,
+              background: i ? "#E4E8F4" : "#F6DFD6",
               justifyContent: "center",
             }),
           ),
@@ -187,10 +236,10 @@ export async function renderCard(
           ...card.items.flatMap((x, i) => [
             i ? text("↓", 32, { color: accent }) : null,
             item(x, i, {
-              width: i % 2 ? 730 : 860,
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "space-between",
+              width: i % 2 ? 780 : 880,
+              flexDirection: "column",
+              alignItems: "flex-start",
+              justifyContent: "center",
               borderLeft: `8px solid ${accent}`,
             }),
           ]),
@@ -217,10 +266,10 @@ export async function renderCard(
       break;
     case "closing":
       scene = box(
-        { height: card.condition ? 810 : 940, justifyContent: "space-between" },
+        { height: card.condition ? 750 : 890, justifyContent: "space-between" },
         box(
           { gap: 32 },
-          text("이제, 한 가지부터", 30, { color: accent, fontWeight: 700 }),
+          box({ width: 100, height: 8, background: accent }),
           title,
         ),
         box(
@@ -232,26 +281,42 @@ export async function renderCard(
       break;
     default:
       scene = box(
-        { gap: 48 },
+        { gap: compact ? 30 : 46 },
         box(
           {
-            flexDirection: "row",
-            alignItems: "center",
-            justifyContent: "space-between",
-            borderBottom: `12px solid ${accent}`,
-            paddingBottom: 38,
+            background: accent,
+            color: paper,
+            padding: compact ? 40 : 52,
+            minHeight: compact ? 280 : 350,
+            justifyContent: "center",
+            borderRadius: index % 2 ? "0 80px 0 0" : "0 0 80px 0",
           },
-          text(String(index + 1).padStart(2, "0"), 150, {
-            color: accent,
+          text(card.title, compact ? 70 : 86, {
             fontWeight: 700,
-            lineHeight: 1,
+            letterSpacing: -3,
+            lineHeight: 1.2,
           }),
-          box({ width: 620 }, title),
         ),
-        body,
-        box({ gap: 20, marginTop: 20 }, ...items),
+        box(
+          { paddingLeft: 26, borderLeft: `5px solid ${accent}`, marginTop: 12 },
+          body,
+        ),
+        box(
+          {
+            gap: compact ? 12 : 20,
+            marginTop: 12,
+            flexDirection: card.items.length === 2 ? "row" : "column",
+          },
+          ...card.items.map((x, i) =>
+            item(x, i, card.items.length === 2 ? { width: 454 } : {}),
+          ),
+        ),
       );
   }
+  // Fit a dense but valid composition before asking the editor to alter meaning.
+  // Only the content region scales; source conditions and page numbers stay legible.
+  if (fit > 0) scene = fitScene(scene, fit === 1 ? 0.9 : 0.78);
+
   const tree = box(
     {
       width: 1080,
@@ -273,7 +338,19 @@ export async function renderCard(
       card.role,
       brief.brand || "",
     ),
-    box({ marginTop: 48, width: 928 }, scene),
+    h(
+      "div",
+      {
+        "data-card-content": true,
+        style: {
+          display: "flex",
+          flexDirection: "column",
+          marginTop: 48,
+          width: 928,
+        },
+      },
+      scene,
+    ),
     card.condition
       ? text(card.condition, 28, {
           position: "absolute",
@@ -300,6 +377,8 @@ export async function renderCard(
     ),
   );
   const overflow: string[] = [];
+  let contentBottom = 0;
+  let contentLimit = 1210;
   const textRects: {
     left: number;
     top: number;
@@ -317,15 +396,9 @@ export async function renderCard(
           width: node.width,
           height: node.height,
         });
-      // Relative content must stay above the condition/footer band; no CSS clipping.
-      if (
-        node.type === "div" &&
-        node.top > 170 &&
-        node.top < 1160 &&
-        node.height > 0 &&
-        node.top + node.height > 1160
-      )
-        overflow.push("본문 배치가 하단 안전 영역을 넘었습니다.");
+      if (node.props?.["data-card-content"])
+        contentBottom = node.top + node.height;
+      if (node.props?.["data-card-note"]) contentLimit = node.top - 28;
       if (
         node.left < 0 ||
         node.left + node.width > 1081 ||
@@ -334,6 +407,9 @@ export async function renderCard(
         overflow.push("글자 또는 도형이 이미지 밖으로 벗어났습니다.");
     },
   });
+  // A long source condition is an intentional bottom note, not overflowing body.
+  if (contentBottom > contentLimit)
+    overflow.push("본문 배치가 하단 안전 영역을 넘었습니다.");
   for (let i = 0; i < textRects.length; i++)
     for (let j = i + 1; j < textRects.length; j++) {
       const a = textRects[i],
@@ -348,7 +424,7 @@ export async function renderCard(
         overflow.push("서로 다른 문구의 영역이 겹칩니다.");
     }
   if (overflow.length) {
-    if (!compact) return renderCard(card, index, brief, true);
+    if (fit < 2) return renderCard(card, index, brief, fit + 1);
     throw new CardWorkflowError(
       "IMAGE_INVALID",
       "문구를 안전 영역 안에 배치하지 못했습니다.",

@@ -150,10 +150,86 @@
 .studio-direction small {
   color: #777d6d;
 }
-.studio-gallery {
+.studio-carousel {
+  width: 100%;
+  max-width: min(640px, calc(76dvh * 0.8));
+  margin: 0 auto;
+  min-width: 0;
+}
+.studio-carousel-track {
+  display: flex;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+  border-radius: 8px;
+}
+.studio-carousel-slide {
+  flex: 0 0 100%;
+  min-width: 0;
+  scroll-snap-align: center;
+  scroll-snap-stop: always;
+}
+.studio-carousel-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+  font-size: 14px;
+}
+.studio-carousel-toolbar > div {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+.studio-carousel-toolbar button {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 24px;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 1px solid #c8cdbe;
+  background: #fff;
+  border-radius: 50%;
+  cursor: pointer;
+  color: #202021;
+}
+.studio-carousel-toolbar button:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+.studio-swipe-hint {
+  color: #727869;
+  font-size: 12px;
+}
+.studio-carousel-dots {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  padding: 8px 0;
+}
+.studio-carousel-dots button {
+  width: 36px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+.studio-carousel-dots span {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #c8cdbe;
+}
+.studio-carousel-dots [aria-current="true"] span {
+  width: 22px;
+  border-radius: 10px;
+  background: #526538;
+}
+.studio-carousel :focus-visible {
+  outline: 3px solid #2c49c6;
+  outline-offset: 2px;
 }
 .studio-card {
   margin: 0;
@@ -212,10 +288,6 @@
 @media (max-width: 640px) {
   .card-studio {
     padding: 22px 0;
-  }
-  .studio-gallery {
-    gap: 16px;
-    grid-template-columns: 1fr;
   }
   .studio-steps {
     grid-template-columns: repeat(3, 1fr);

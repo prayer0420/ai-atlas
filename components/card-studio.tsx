@@ -1,5 +1,6 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { CardCarousel } from "./card-carousel";
 import {
   Download,
   LoaderCircle,
@@ -26,6 +27,11 @@ type ResponseData = {
   prompts: string[];
   verification: string;
   imageMode: string;
+  policy?: {
+    automaticStarted: number;
+    automaticLimit: number;
+    cardsPerResource: number;
+  };
   graph: { from: string; to: string; when: string }[];
 };
 type Api = (path: string, options?: RequestInit) => Promise<any>;
@@ -224,6 +230,13 @@ export function CardStudio({
           이 화면은 자동으로 갱신됩니다.
         </p>
       )}
+      <p className="studio-help">
+        직접 제작은 일일 한도 없이 · 자동 제작은 하루 3건, 각 8장
+        {result?.policy
+          ? ` · 오늘 자동 ${result.policy.automaticStarted}/3건 시작`
+          : ""}{" "}
+        (한국 시간 기준)
+      </p>
       {!active && (
         <div className="studio-controls">
           {(run?.state === "waiting_input" &&
@@ -401,7 +414,7 @@ export function CardStudio({
             <p>{run.data.story.direction}</p>
             <small>{result?.imageMode} · 1080×1350 · 각각의 PNG 파일</small>
           </div>
-          <div className="studio-gallery">
+          <CardCarousel key={run.id}>
             {run.data.story.cards.map((card, i) => (
               <CardImage
                 key={`${run.id}-${i}`}
@@ -411,7 +424,7 @@ export function CardStudio({
                 fetchFile={fetchFile}
               />
             ))}
-          </div>
+          </CardCarousel>
           <section className="studio-caption">
             <h3>게시글 캡션</h3>
             <p>{run.data.story.caption}</p>

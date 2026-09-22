@@ -176,6 +176,12 @@ test("all eight layouts render separate Korean 1080x1350 PNGs without overflow",
     await writeFile(`.local/card-preview/${i + 1}.png`, result.buffer);
   }
 });
+test("a two-line source condition is retained without a false overflow failure", async () => {
+  const card = { ...fixtureStory.cards[0], condition: "원문의 Example & Company 맞춤 구축 사례입니다. 결과는 담당자가 검토하고 수정해야 합니다." };
+  const result = await renderCard(card, 0, cardBriefSchema.parse({}));
+  assert.ok(result.checked);
+  assert.equal(result.height, 1350);
+});
 test("card graph PostgreSQL: dedupe, RLS, lease fencing, checkpoint resume and verified learning", async () => {
   const db = new PGlite();
   try {

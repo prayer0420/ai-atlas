@@ -77,8 +77,11 @@ export async function executeCardRun(
     if (attempt > 3) {
       await checkpoint({
         state: "failed",
+        error_code: run.error_code || "REPAIR_EXHAUSTED",
         message:
-          "자동 수정 횟수에 도달했습니다. 사유를 확인한 뒤 이어서 제작해 주세요.",
+          "자동 수정 후에도 확인할 부분이 남았습니다. " +
+          (run.data.issues?.slice(0, 2).join(" ") ||
+            "연결 상태를 확인한 뒤 이어서 제작해 주세요."),
         next_action: "이어서 제작",
       });
       break;
@@ -138,7 +141,7 @@ export async function executeCardRun(
           const analyzed = await analyzeResource(
             job.user_id,
             source.id,
-            true,
+            job.payload.manual === true,
             onClaim,
           );
           source = analyzed.resource;
@@ -394,7 +397,7 @@ export async function executeCardRun(
       const rewrite =
         recovery.strategy === "rewrite_story" &&
         ["render", "verify"].includes(node);
-      if (rewrite)
+      if (rewrite && node === "render")
         data.issues = [
           ...data.issues,
           "배치 오류가 난 카드의 제목·본문·항목을 더 짧게 바꾸고 항목은 최대 2개로 줄여 안전 영역에 맞추세요.",

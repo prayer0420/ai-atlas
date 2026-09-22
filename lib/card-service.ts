@@ -1,10 +1,15 @@
 import { admin, AppError, checkDb } from "./server";
-import { cardBriefSchema, type CardRun } from "./card-workflow";
+import {
+  CARD_PROMPT_VERSION,
+  cardBriefSchema,
+  type CardRun,
+} from "./card-workflow";
 export const CARD_BUCKET = "ai-atlas-cards";
 export async function startCards(
   userId: string,
   resourceId: string,
   input: unknown = {},
+  origin: "manual" | "automatic" = "manual",
 ) {
   const parsed = cardBriefSchema.safeParse(input);
   if (!parsed.success)
@@ -13,10 +18,12 @@ export async function startCards(
       400,
     );
   const brief = parsed.data;
-  const result = await admin().rpc("ai_atlas_start_cards", {
+  const result = await admin().rpc("ai_atlas_request_cards", {
     p_user_id: userId,
     p_resource_id: resourceId,
     p_brief: brief,
+    p_origin: origin,
+    p_version: CARD_PROMPT_VERSION,
   });
   if (result.error?.message.includes("RESOURCE_NOT_FOUND"))
     throw new AppError("자료를 찾을 수 없습니다.", 404);

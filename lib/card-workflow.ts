@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const CARD_PROMPT_VERSION = "ko-editorial-2026-09-22-v1";
+export const CARD_PROMPT_VERSION = "ko-editorial-2026-09-22-v2";
 export const CARD_SIZE = { width: 1080, height: 1350 } as const;
 export const cardBriefSchema = z
   .object({

@@ -9,6 +9,7 @@ import {
 } from "@/lib/server";
 import { latestCards, startCards } from "@/lib/card-service";
 import { cardGraph, imagePrompt } from "@/lib/card-workflow";
+import { kstDate } from "@/lib/feeds";
 export const dynamic = "force-dynamic";
 type Context = { params: Promise<{ id: string }> };
 export async function GET(req: NextRequest, ctx: Context) {
@@ -39,9 +40,20 @@ export async function GET(req: NextRequest, ctx: Context) {
           .limit(100)
       : { data: [], error: null };
     checkDb(events.error);
+    const usage = await db
+      .from("ai_atlas_card_daily_usage")
+      .select("cards")
+      .eq("user_id", user.id)
+      .eq("usage_date", kstDate());
+    checkDb(usage.error);
     return NextResponse.json(
       {
         run,
+        policy: {
+          automaticStarted: usage.data?.length || 0,
+          automaticLimit: 3,
+          cardsPerResource: 8,
+        },
         stale,
         events: events.data,
         graph: cardGraph,

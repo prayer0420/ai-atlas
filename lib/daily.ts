@@ -11,6 +11,7 @@ import {
 import { sourceType, extract } from "./extract";
 import { enqueue, queueLocally, localRuntime } from "./automation";
 import { formatDaily } from "./daily-format";
+import { startCards } from "./card-service";
 import {
   issueSchema,
   type FeedItem,
@@ -247,7 +248,7 @@ export async function runDaily(userId: string, onClaim?: (id: string) => void) {
           (!i.published_at ||
             Date.parse(i.published_at) >= Date.now() - 14 * 86400000),
       ),
-      prefs.story_count,
+      Math.min(3, prefs.story_count),
     );
     if (!items.length)
       throw new AppError(
@@ -353,7 +354,10 @@ export async function runDaily(userId: string, onClaim?: (id: string) => void) {
     else
       warning =
         "자료를 수집했습니다. PC가 켜지면 무료 AI가 교육용 카드뉴스로 정리합니다. 현재는 원문 미리보기입니다.";
-    for (const item of items) await archiveFeed(userId, item.id);
+    for (const item of items) {
+      const resourceId = await archiveFeed(userId, item.id);
+      await startCards(userId, resourceId, {}, "automatic");
+    }
     const saved = await db
       .from("ai_atlas_issues")
       .upsert(

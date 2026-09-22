@@ -108,7 +108,8 @@ for (const scenario of [
             user_metadata: {},
             created_at: old,
           });
-        if (url.includes("/rpc/ai_atlas_start_cards")) {
+        if (url.includes("/rpc/ai_atlas_request_cards")) {
+          assert.equal(JSON.parse(String(init?.body)).p_origin, "manual");
           queues++;
           return scenario === "queue-fails"
             ? json({ code: "P0001", message: "QUEUE_FULL" }, 400)

@@ -280,39 +280,55 @@ async function tick() {
             error: null,
           })
           .eq("id", current.id)
+          .eq("user_id", ownerId)
           .eq("lease_token", current.lease_token)
+          .eq("status", "running")
       ).error,
     );
-    log("Completed " + current.kind);
-    if (current.kind === "analyze" && current.payload.goal !== "cards")
-      await startCards(ownerId, String(current.payload.resourceId));
-    if (
-      current.kind === "wiki" &&
-      result &&
-      typeof result === "object" &&
-      "remaining" in result &&
-      Number(result.remaining) > 0 &&
-      "written" in result &&
-      Number(result.written) > 0
-    )
-      await enqueue(ownerId, "wiki");
-    if (
-      (current.kind === "daily" &&
-        current.payload.action !== "manual-collect") ||
-      (current.kind === "analyze" &&
-        (current.payload.goal !== "cards" ||
-          (result as { state?: string })?.state === "completed"))
-    ) {
-      const prefs = await db
-        .from("ai_atlas_preferences")
-        .select("auto_wiki")
-        .eq("user_id", ownerId)
-        .maybeSingle();
-      if (prefs.data?.auto_wiki) await enqueue(ownerId, "wiki");
-    }
+    const completed = current;
+    // Release the completed lease before optional downstream work. A wiki quota
+    // or vault failure must never requeue an already completed card generation.
     current = null;
     analysisClaimId = null;
     taskClaimId = null;
+    log("Completed " + completed.kind);
+    if (completed.kind === "analyze" && completed.payload.goal !== "cards")
+      await startCards(
+        ownerId,
+        String(completed.payload.resourceId),
+        {},
+        completed.payload.manual === true ? "manual" : "automatic",
+      );
+    try {
+      if (
+        completed.kind === "wiki" &&
+        result &&
+        typeof result === "object" &&
+        "remaining" in result &&
+        Number(result.remaining) > 0 &&
+        "written" in result &&
+        Number(result.written) > 0
+      )
+        await enqueue(ownerId, "wiki");
+      if (
+        (completed.kind === "daily" &&
+          completed.payload.action !== "manual-collect") ||
+        (completed.kind === "analyze" &&
+          (completed.payload.goal !== "cards" ||
+            (result as { state?: string })?.state === "completed"))
+      ) {
+        const prefs = await db
+          .from("ai_atlas_preferences")
+          .select("auto_wiki")
+          .eq("user_id", ownerId)
+          .maybeSingle();
+        if (prefs.data?.auto_wiki) await enqueue(ownerId, "wiki");
+      }
+    } catch {
+      log(
+        "지식 노트 후속 예약을 보류했습니다. 완료된 제작과 남은 대기열은 유지합니다.",
+      );
+    }
     busy = false;
     await sync();
   } catch (e) {
@@ -331,7 +347,9 @@ async function tick() {
               finished_at: retry ? null : new Date().toISOString(),
             })
             .eq("id", current.id)
+            .eq("user_id", ownerId)
             .eq("lease_token", current.lease_token)
+            .eq("status", "running")
         ).error,
       );
     }

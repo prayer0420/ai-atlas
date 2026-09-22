@@ -640,7 +640,7 @@ export function BrainPanel({
                       />
                     </label>
                     <label>
-                      하루에 읽을 소식
+                      자동 제작할 자료 (각 8장)
                       <select
                         value={prefs.story_count}
                         onChange={(e) =>
@@ -650,7 +650,7 @@ export function BrainPanel({
                           })
                         }
                       >
-                        {[1, 2, 3, 4, 5].map((n) => (
+                        {[1, 2, 3].map((n) => (
                           <option key={n} value={n}>
                             {n}개
                           </option>

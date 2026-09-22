@@ -4,7 +4,7 @@ import { createHash } from "node:crypto";
 import { z } from "zod";
 import { admin, checkDb } from "./server";
 import { sourceType, validateUrl } from "./extract";
-import { enqueue } from "./automation";
+import { startCards } from "./card-service";
 import { readableText } from "./content-text";
 export const captureSchema = z.object({
   items: z
@@ -102,11 +102,11 @@ export async function importInbox(
           }
         }
         if (existing.data && existing.data.status !== "ready")
-          await enqueue(
+          await startCards(
             userId,
-            "analyze",
-            { resourceId: existing.data.id, manual: manualAnalysis },
             existing.data.id,
+            {},
+            manualAnalysis ? "manual" : "automatic",
           );
       }
       const processed = path.join(root, "processed");
