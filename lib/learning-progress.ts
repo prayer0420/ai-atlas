@@ -44,7 +44,7 @@ export function learningProgress(
   if (r.status === "needs_content")
     return {
       phase: "needs_content",
-      label: "본문 필요",
+      label: "도움 필요",
       message:
         "링크에서 충분한 내용을 읽지 못했습니다. 원문이나 자막을 붙여 넣으면 다시 정리할 수 있습니다.",
       action: "source",
@@ -79,9 +79,9 @@ export function learningProgress(
     };
   return {
     phase: "saved",
-    label: "원문 저장됨",
+    label: "제작 전",
     message:
-      "원문을 보관했습니다. 정리를 시작하면 핵심 카드와 상세 분석을 함께 만듭니다.",
+      "자료를 저장했습니다. 카드뉴스 만들기를 누르면 원문 분석부터 장별 이미지까지 이어서 만듭니다.",
     action: "analyze",
   };
 }

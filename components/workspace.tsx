@@ -262,6 +262,22 @@ export function Workspace() {
     },
     [client],
   );
+  const fetchFile = useCallback(
+    async (path: string) => {
+      const token = (await client?.auth.getSession())?.data.session
+        ?.access_token;
+      if (!token) throw new Error("로그인 후 사용할 수 있습니다.");
+      const response = await fetch(path, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || "파일을 불러오지 못했습니다.");
+      }
+      return response.blob();
+    },
+    [client],
+  );
   const load = useCallback(
     async (quiet = false) => {
       if (!session || ["daily", "wiki", "obsidian"].includes(view)) return;
@@ -779,7 +795,7 @@ export function Workspace() {
           </div>
         </header>
         <main id="main" tabIndex={-1}>
-          {session && config?.aiMode === "local" && (
+          {session && !selected && config?.aiMode === "local" && (
             <AutomationStatus
               api={api}
               onUpdated={automationUpdated}
@@ -810,6 +826,8 @@ export function Workspace() {
             <LessonView
               key={selected.id}
               resource={selected}
+              api={api}
+              fetchFile={fetchFile}
               onBack={() => {
                 setSelected(null);
                 window.history.replaceState(null, "", window.location.pathname);
@@ -872,7 +890,7 @@ export function Workspace() {
                           ? "관심 분야를 따라 흩어진 지식을 연결해 보세요."
                           : view === "settings"
                             ? "자동 정리, 계정과 내보내기를 관리합니다. 평소에는 바꿀 필요가 없습니다."
-                            : "자료를 추가하면 핵심 카드로 정리해요. 자세한 설명도 함께 보관합니다."}
+                            : "자료를 추가하면 이야기를 정리하고 카드뉴스 이미지까지 만들어요."}
                   </p>
                 </div>
               </div>
@@ -922,9 +940,10 @@ export function Workspace() {
                   <details className="setting-card full">
                     <summary>사용 도움말</summary>
                     <p>
-                      ① 자료 추가에서 링크나 텍스트를 넣으세요. ② 정리가 끝나면
-                      자료를 열어 카드를 읽으세요. ③ 더 궁금하면 상세 분석을
-                      선택하세요.
+                      ① 자료 추가에서 링크나 텍스트를 넣으세요. ② 원문
+                      분석·원고·이미지·검수가 자동으로 이어집니다. ③ 완성된
+                      자료에서 이미지와 캡션을 받으세요. 자세한 설명은 상세
+                      분석에 남습니다.
                     </p>
                     <p>
                       로그인이 필요한 글이나 영상은 본문·자막이 필요할 수
@@ -987,11 +1006,11 @@ export function Workspace() {
                         </span>
                         <ArrowRight size={16} aria-hidden="true" />
                         <span>
-                          <b>2</b>자동으로 정리
+                          <b>2</b>카드뉴스 제작
                         </span>
                         <ArrowRight size={16} aria-hidden="true" />
                         <span>
-                          <b>3</b>카드부터 읽기
+                          <b>3</b>이미지·캡션 받기
                         </span>
                       </div>
                     )}
@@ -1007,9 +1026,9 @@ export function Workspace() {
                   <nav className="state-tabs" aria-label="자료 상태">
                     {[
                       ["all", "전체"],
-                      ["ready", "읽기 가능"],
-                      ["pending", "정리 전·진행 중"],
-                      ["attention", "확인 필요"],
+                      ["ready", isDemo ? "예시 읽기" : "카드뉴스 완성"],
+                      ["pending", "제작 전·진행 중"],
+                      ["attention", "도움 필요"],
                     ].map(([id, label]) => (
                       <button
                         key={id}
@@ -1504,7 +1523,7 @@ export function Workspace() {
                       checked={autoAnalyze}
                       onChange={(e) => setAutoAnalyze(e.target.checked)}
                     />
-                    저장 후 자동으로 정리하기
+                    저장 후 카드뉴스 이미지까지 만들기
                   </label>
                 </div>
                 {!config?.ai && (
@@ -1527,7 +1546,7 @@ export function Workspace() {
                   {adding
                     ? "저장하고 있어요…"
                     : autoAnalyze
-                      ? "추가하고 정리하기"
+                      ? "추가하고 카드뉴스 만들기"
                       : "원문만 저장"}
                 </button>
               </form>

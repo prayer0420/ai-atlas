@@ -10,6 +10,7 @@ import {
 } from "@/lib/server";
 import { ensureOwner } from "@/lib/brain-ai";
 import { enqueue, localMode } from "@/lib/automation";
+import { latestCards, startCards } from "@/lib/card-service";
 import { z } from "zod";
 export const dynamic = "force-dynamic";
 export async function GET(req: NextRequest) {
@@ -24,7 +25,9 @@ export async function GET(req: NextRequest) {
         .maybeSingle(),
       db
         .from("ai_atlas_queue")
-        .select("id,kind,status,attempts,error,created_at,finished_at,payload,result")
+        .select(
+          "id,kind,status,attempts,error,created_at,finished_at,payload,result",
+        )
         .order("created_at", { ascending: false })
         .limit(12),
       db
@@ -48,7 +51,7 @@ export async function GET(req: NextRequest) {
         worker: worker.data,
         online: Boolean(
           worker.data?.engine_ready &&
-            Date.parse(worker.data.last_seen) > Date.now() - 120000,
+          Date.parse(worker.data.last_seen) > Date.now() - 120000,
         ),
         jobs: jobs.data,
         pending: pending.count || 0,
@@ -85,7 +88,9 @@ export async function POST(req: NextRequest) {
       );
       return NextResponse.json({ ok: true });
     }
-    const collect = z.enum(["all", "instagram", "threads", "youtube"]).safeParse(input.collect);
+    const collect = z
+      .enum(["all", "instagram", "threads", "youtube"])
+      .safeParse(input.collect);
     if (collect.success) {
       const result = await enqueue(
         user.id,
@@ -100,10 +105,28 @@ export async function POST(req: NextRequest) {
       .from("ai_atlas_queue")
       .select("*")
       .eq("id", id)
+      .eq("user_id", user.id)
       .eq("status", "failed")
       .maybeSingle();
     checkDb(job.error);
     if (!job.data) throw new AppError("다시 시도할 작업이 없습니다.", 404);
+    if (job.data.payload?.goal === "cards") {
+      const resourceId = uuid.parse(job.data.payload.resourceId);
+      const previous = await latestCards(user.id, resourceId);
+      const run = await startCards(
+        user.id,
+        resourceId,
+        previous.run?.brief || {},
+      );
+      return NextResponse.json(
+        {
+          queued: run.state !== "completed",
+          job_id: run.queue_id,
+          message: "완료한 단계부터 카드뉴스 제작을 이어갑니다.",
+        },
+        { status: 202 },
+      );
+    }
     const result = await enqueue(
       user.id,
       job.data.kind,

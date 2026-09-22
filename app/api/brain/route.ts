@@ -11,6 +11,7 @@ import {
 } from "@/lib/server";
 import { ensureOwner } from "@/lib/brain-ai";
 import { archiveFeed, preferences, runDaily } from "@/lib/daily";
+import { startCards } from "@/lib/card-service";
 import { feedSources } from "@/lib/feeds";
 import { compileWiki, wikiLint } from "@/lib/wiki";
 import type { WikiPage } from "@/lib/brain-types";
@@ -122,6 +123,7 @@ export async function POST(req: NextRequest) {
         "collect",
         "preferences",
         "archive",
+        "cards",
         "review",
         "compile",
         "ask",
@@ -168,6 +170,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true });
     }
     const id = uuid.parse(input.id);
+    if (action === "cards") {
+      const resource_id = await archiveFeed(user.id, id);
+      const run = await startCards(user.id, resource_id);
+      return NextResponse.json(
+        { resource_id, run, queued: run.state !== "completed" },
+        { status: 202 },
+      );
+    }
     if (action === "archive")
       return NextResponse.json({ resource_id: await archiveFeed(user.id, id) });
     if (action === "review") {

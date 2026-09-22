@@ -1,0 +1,238 @@
+.card-studio {
+  padding: 30px 0;
+  max-width: 1100px;
+  margin: auto;
+}
+.studio-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+}
+.studio-heading h2 {
+  font-size: clamp(23px, 3vw, 34px);
+  letter-spacing: -1px;
+  margin: 10px 0 14px;
+  line-height: 1.35;
+}
+.studio-heading p {
+  line-height: 1.8;
+  color: #62645d;
+}
+.studio-eyebrow {
+  font-size: 12px;
+  color: #777d68;
+  letter-spacing: 0.04em;
+}
+.studio-controls {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  margin: 25px 0;
+}
+.studio-settings {
+  flex: 1;
+  min-width: 230px;
+}
+.studio-settings summary,
+.studio-process summary {
+  cursor: pointer;
+  font-size: 14px;
+  padding: 12px 0;
+}
+.studio-fields {
+  display: grid;
+  gap: 15px;
+  padding: 20px 0;
+  max-width: 640px;
+}
+.studio-fields label {
+  display: grid;
+  gap: 7px;
+  font-size: 13px;
+}
+.studio-fields input {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #d5d7ca;
+  border-radius: 6px;
+  background: #fff;
+  font: inherit;
+}
+.studio-process {
+  border-top: 1px solid #daddd2;
+  padding: 12px 0;
+  margin: 22px 0;
+}
+.studio-process p,
+.studio-process li {
+  font-size: 14px;
+  line-height: 1.8;
+}
+.studio-steps {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  padding: 0;
+  list-style: none;
+  gap: 12px;
+  margin: 18px 0 30px;
+}
+.studio-steps li {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  color: #7c8073;
+  font-size: 12px;
+}
+.studio-steps li span {
+  border: 1px solid #d8dace;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  width: 29px;
+  height: 29px;
+}
+.studio-steps .done {
+  color: #526538;
+}
+.studio-steps .done span {
+  background: #e8edde;
+}
+.studio-steps .current {
+  color: #222d17;
+  font-weight: 700;
+}
+.studio-steps .current span {
+  background: #617344;
+  color: white;
+}
+.studio-steps small {
+  font-weight: 400;
+}
+.studio-events {
+  padding: 0;
+  list-style: none;
+  max-height: 320px;
+  overflow: auto;
+}
+.studio-events li {
+  display: grid;
+  grid-template-columns: 105px 1fr;
+  gap: 14px;
+  padding: 12px 0;
+  border-bottom: 1px solid #e5e7dd;
+}
+.studio-events time {
+  color: #858a7a;
+  font-size: 12px;
+}
+.studio-issue {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  color: #8c4229;
+}
+.studio-help {
+  font-size: 13px !important;
+  color: #777d6d !important;
+  line-height: 1.8;
+}
+.studio-direction {
+  border-top: 1px solid #daddd2;
+  margin-top: 28px;
+  padding: 26px 0;
+}
+.studio-direction p {
+  font-size: 16px;
+  line-height: 1.9;
+}
+.studio-direction small {
+  color: #777d6d;
+}
+.studio-gallery {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px;
+}
+.studio-card {
+  margin: 0;
+  min-width: 0;
+}
+.studio-card img {
+  display: block;
+  width: 100%;
+  height: auto;
+  box-shadow: 0 8px 28px #2020210c;
+}
+.studio-card a {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 14px;
+  font-size: 13px;
+  color: #505b40;
+}
+.studio-image-loading {
+  aspect-ratio: 4/5;
+  background: #eeeade;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  font-size: 14px;
+}
+.studio-caption {
+  padding: 30px 0;
+  line-height: 1.9;
+}
+.studio-caption p {
+  white-space: pre-wrap;
+}
+.studio-caption a {
+  overflow-wrap: anywhere;
+}
+.studio-process textarea {
+  width: 100%;
+  min-height: 180px;
+  font: inherit;
+  line-height: 1.7;
+  padding: 15px;
+  border: 1px solid #d8dace;
+  background: #f8f9f4;
+  resize: vertical;
+}
+.studio-process section {
+  padding: 15px 0;
+  border-top: 1px solid #e2e6d8;
+}
+.studio-process ul {
+  overflow-wrap: anywhere;
+}
+@media (max-width: 640px) {
+  .card-studio {
+    padding: 22px 0;
+  }
+  .studio-gallery {
+    gap: 16px;
+    grid-template-columns: 1fr;
+  }
+  .studio-steps {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
+  }
+  .studio-events li {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+  .studio-heading > svg {
+    display: none;
+  }
+  .studio-controls > .primary-button {
+    width: 100%;
+  }
+}
+.brief-layout > .card-studio {
+  grid-column: 1/-1;
+  width: 100%;
+}

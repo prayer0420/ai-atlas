@@ -868,14 +868,14 @@ export function BrainPanel({
                             className="text-button"
                             disabled={!!busy}
                             onClick={async () => {
-                              const r = await run("archive", {
+                              const r = await run("cards", {
                                 id: story.feed_id,
                               });
                               if (r?.resource_id) onResource(r.resource_id);
                             }}
                           >
                             <BookOpen size={16} />
-                            학습 자료 열기
+                            이 소식으로 카드뉴스 만들기
                           </button>
                           <button
                             className={

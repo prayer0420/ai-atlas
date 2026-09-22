@@ -90,6 +90,7 @@ async function hermesStructured<T extends z.ZodType>(
       output_tokens: 0,
     };
   } catch (error) {
+    if (error instanceof z.ZodError) throw error;
     console.error("Hermes provider failed", {
       name: error instanceof Error ? error.name : "unknown",
       // Never log prompts, stdout, stderr, or credentials from provider errors.

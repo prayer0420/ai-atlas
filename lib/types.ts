@@ -83,6 +83,8 @@ export const lessonSchema = z.object({
 });
 export type Lesson = z.infer<typeof lessonSchema>;
 export type Resource = {
+  content_hash?: string;
+  card_state?: string | null;
   progress?: LearningProgress;
   analysis_started_at?: string | null;
   summary?: string;

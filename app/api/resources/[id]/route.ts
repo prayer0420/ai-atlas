@@ -60,8 +60,8 @@ export async function PATCH(req: NextRequest, ctx: Context) {
     if (!current) throw new AppError("자료를 찾을 수 없습니다.", 404);
     if (input.raw_text !== undefined) {
       const [progress] = await withProgress(db, user.id, [current]);
-      if (progress.progress.phase === "running")
-        throw new AppError("분석이 끝난 뒤 본문을 수정해 주세요.", 409);
+      if (["running","queued"].includes(progress.progress.phase))
+        throw new AppError("진행 중인 제작이 끝난 뒤 본문을 수정해 주세요.", 409);
     }
     const { restore, ...values } = input;
     const update: Record<string, unknown> = { ...values };
@@ -73,6 +73,7 @@ export async function PATCH(req: NextRequest, ctx: Context) {
         error_message: null,
         source_method: "pasted",
         learned: false,
+        card_state: null,
       });
       if (!current.source_url)
         update.fingerprint = createHash("sha256")

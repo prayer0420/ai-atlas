@@ -14,6 +14,8 @@ import { kstDate } from "../lib/feeds";
 import { importInbox } from "../lib/inbox";
 import { collectAside, type CaptureChannel } from "../lib/aside-capture";
 import { syncPersonalSocial } from "../lib/personal-social";
+import { executeCardRun } from "../lib/card-pipeline";
+import { startCards } from "../lib/card-service";
 
 process.env.AI_PROVIDER = "local";
 process.env.LOCAL_AI_RUNTIME = "1";
@@ -174,7 +176,11 @@ async function tick() {
   log("Starting " + current.kind);
   try {
     let result: unknown;
-    if (current.kind === "analyze")
+    if (current.kind === "analyze" && current.payload.goal === "cards")
+      result = await executeCardRun(current, (id) => {
+        analysisClaimId = id;
+      });
+    else if (current.kind === "analyze")
       result = await analyzeResource(
         ownerId,
         String(current.payload.resourceId),
@@ -264,7 +270,12 @@ async function tick() {
             finished_at: new Date().toISOString(),
             result:
               current.kind === "analyze"
-                ? { resourceId: current.payload.resourceId }
+                ? {
+                    resourceId: current.payload.resourceId,
+                    ...(current.payload.goal === "cards"
+                      ? (result as Record<string, unknown>)
+                      : {}),
+                  }
                 : result,
             error: null,
           })
@@ -273,6 +284,8 @@ async function tick() {
       ).error,
     );
     log("Completed " + current.kind);
+    if (current.kind === "analyze" && current.payload.goal !== "cards")
+      await startCards(ownerId, String(current.payload.resourceId));
     if (
       current.kind === "wiki" &&
       result &&
@@ -286,7 +299,9 @@ async function tick() {
     if (
       (current.kind === "daily" &&
         current.payload.action !== "manual-collect") ||
-      current.kind === "analyze"
+      (current.kind === "analyze" &&
+        (current.payload.goal !== "cards" ||
+          (result as { state?: string })?.state === "completed"))
     ) {
       const prefs = await db
         .from("ai_atlas_preferences")

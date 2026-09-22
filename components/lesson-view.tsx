@@ -22,6 +22,7 @@ import { readingExcerpt } from "@/lib/reading";
 import { readableText, readableValue } from "@/lib/content-text";
 import { LessonCards } from "./lesson-cards";
 import { learningProgress } from "@/lib/learning-progress";
+import { CardStudio } from "./card-studio";
 export function LessonView({
   resource: r,
   onBack,
@@ -31,6 +32,8 @@ export function LessonView({
   busy,
   onTrash,
   onWiki,
+  api,
+  fetchFile,
 }: {
   resource: Resource;
   onBack: () => void;
@@ -40,6 +43,8 @@ export function LessonView({
   busy: boolean;
   onTrash: () => void;
   onWiki: () => void;
+  api: (path: string, options?: RequestInit) => Promise<any>;
+  fetchFile: (path: string) => Promise<Blob>;
 }) {
   const [tab, setTab] = useState("brief");
   const progress = r.progress || learningProgress(r);
@@ -161,7 +166,7 @@ export function LessonView({
           )}
         </div>
       </div>
-      {l && progress.phase !== "ready" && (
+      {l && tab !== "brief" && progress.phase !== "ready" && (
         <div className="notice" role="status">
           {progress.label} · {progress.message} 아래에는 이전에 완성된 분석을
           표시합니다.
@@ -187,7 +192,14 @@ export function LessonView({
       <div id="lesson-reading-panel" aria-label="선택한 읽기 내용">
         {tab === "brief" && (
           <div className="brief-layout">
-            {l ? (
+            {!r.demo ? (
+              <CardStudio
+                resourceId={r.id}
+                api={api}
+                fetchFile={fetchFile}
+                onSource={() => setTab("source")}
+              />
+            ) : l ? (
               <LessonCards
                 key={r.id + r.updated_at}
                 lesson={l}

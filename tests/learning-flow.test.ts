@@ -108,13 +108,17 @@ for (const scenario of [
             user_metadata: {},
             created_at: old,
           });
-        if (url.includes("/rpc/ai_atlas_enqueue")) {
+        if (url.includes("/rpc/ai_atlas_start_cards")) {
           queues++;
           return scenario === "queue-fails"
             ? json({ code: "P0001", message: "QUEUE_FULL" }, 400)
-            : json(id);
+            : json({id,queue_id:id,state:"queued"});
         }
         if (url.includes("/ai_atlas_queue")) {
+          assert.match(url, /user_id=eq\./);
+          return json([]);
+        }
+        if (url.includes("/ai_atlas_card_runs")) {
           assert.match(url, /user_id=eq\./);
           return json([]);
         }

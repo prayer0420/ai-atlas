@@ -9,12 +9,13 @@ import {
   AppError,
   ensureAIAllowed,
 } from "@/lib/server";
-import { enqueue, queueLocally } from "@/lib/automation";
+import { queueLocally } from "@/lib/automation";
 import { withProgress } from "@/lib/resource-progress";
 import { STALE_ANALYSIS_MS } from "@/lib/learning-progress";
 import type { Resource } from "@/lib/types";
 import { sourceType, validateUrl } from "@/lib/extract";
 import { readableValue } from "@/lib/content-text";
+import { startCards } from "@/lib/card-service";
 export const dynamic = "force-dynamic";
 export async function GET(req: NextRequest) {
   try {
@@ -24,7 +25,7 @@ export async function GET(req: NextRequest) {
     let q = db
       .from("ai_atlas_resources")
       .select(
-        "id,title,source_url,source_type,category,tags,status,favorite,learned,created_at,updated_at,analysis_started_at,deleted_at,error_message,summary:lesson->>summary,visual:lesson->diagram",
+        "id,title,source_url,source_type,category,tags,status,card_state,content_hash,favorite,learned,created_at,updated_at,analysis_started_at,deleted_at,error_message,summary:lesson->>summary,visual:lesson->diagram",
         { count: "exact" },
       )
       .eq("user_id", user.id);
@@ -35,17 +36,18 @@ export async function GET(req: NextRequest) {
         : q.is("deleted_at", null);
     if (view === "favorites") q = q.eq("favorite", true);
     if (view === "learned") q = q.eq("learned", true);
-    if (view === "inbox") q = q.neq("status", "ready");
+    if (view === "inbox")
+      q = q.or("card_state.is.null,card_state.neq.completed");
     const state = p.get("state");
     const cutoff = new Date(Date.now() - STALE_ANALYSIS_MS).toISOString();
-    if (state === "ready") q = q.eq("status", "ready");
+    if (state === "ready") q = q.eq("card_state", "completed");
     if (state === "pending")
       q = q.or(
-        `status.eq.saved,and(status.eq.analyzing,analysis_started_at.gte.${cutoff})`,
+        `card_state.in.(queued,running,recovering),and(card_state.is.null,status.in.(saved,ready)),and(card_state.is.null,status.eq.analyzing,analysis_started_at.gte.${cutoff})`,
       );
     if (state === "attention")
       q = q.or(
-        `status.in.(failed,needs_content),and(status.eq.analyzing,analysis_started_at.lt.${cutoff})`,
+        `card_state.in.(waiting_input,failed),and(card_state.is.null,status.in.(failed,needs_content)),and(card_state.is.null,status.eq.analyzing,analysis_started_at.lt.${cutoff})`,
       );
     const category = p.get("category");
     if (category && category !== "전체") q = q.eq("category", category);
@@ -146,19 +148,19 @@ export async function POST(req: NextRequest) {
     if (data.analyze && queueLocally()) {
       try {
         ensureAIAllowed(user.email);
-        const queued = await enqueue(
-          user.id,
-          "analyze",
-          { resourceId: resource.id, manual: true },
-          resource.id,
-        );
+        const run = await startCards(user.id, resource.id);
+        const queued = {
+          queued: true,
+          job_id: run.queue_id,
+          message: "원문 분석부터 카드뉴스 이미지 완성까지 이어서 처리합니다.",
+        };
         return NextResponse.json(
           {
             resource: {
               ...resource,
               progress: {
                 phase: "queued",
-                label: "정리 대기",
+                label: "제작 대기",
                 message: queued.message,
                 action: null,
               },

@@ -9,8 +9,9 @@ type Job = {
   error: string | null;
   created_at: string;
   finished_at: string | null;
-  payload?: { action?: string; channel?: CaptureChannel };
+  payload?: { action?: string; channel?: CaptureChannel; goal?: string };
   result?: {
+    state?: string;
     saved?: number;
     imported?: number;
     scanned?: number;
@@ -402,9 +403,18 @@ export function AutomationStatus({
                     <strong>
                       {j.payload?.action === "manual-collect"
                         ? "자료 가져오기"
-                        : names[j.kind] || "자료 정리"}
+                        : j.payload?.goal === "cards"
+                          ? "카드뉴스 제작"
+                          : names[j.kind] || "자료 정리"}
                     </strong>{" "}
-                    · {statuses[j.status]}
+                    ·{" "}
+                    {j.payload?.goal === "cards" &&
+                    j.result?.state === "waiting_input"
+                      ? "도움 필요"
+                      : j.payload?.goal === "cards" &&
+                          j.result?.state === "failed"
+                        ? "확인 필요"
+                        : statuses[j.status]}
                     {j.error && <p>{j.error}</p>}
                   </div>
                   {j.status === "failed" && (
