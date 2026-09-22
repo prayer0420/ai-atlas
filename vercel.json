@@ -1,5 +1,6 @@
 {
   "framework": "nextjs",
+  "buildCommand": "npm run build",
   "regions": ["icn1"],
   "crons": [
     { "path": "/api/cron/daily", "schedule": "0 0 * * *" },
