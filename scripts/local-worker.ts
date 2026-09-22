@@ -22,19 +22,24 @@ process.env.LOCAL_AI_RUNTIME = "1";
 const db = admin();
 const pause = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 let ownerId = "",
-  busy = false,
   engineReady = false,
-  lastSync = 0;
-let analysisClaimId: string | null = null;
-let taskClaimId: string | null = null;
-let current: {
+  lastSync = 0,
+  lastMaintenance = 0;
+type Job = {
   id: string;
   lease_token: string;
   user_id: string;
   kind: string;
   payload: Record<string, unknown>;
   attempts: number;
-} | null = null;
+};
+type Execution = {
+  current: Job | null;
+  analysisClaimId: string | null;
+  taskClaimId: string | null;
+};
+const executions = new Set<Execution>();
+const pendingExecutions = new Set<Promise<void>>();
 const log = (message: string) =>
   console.log(new Date().toISOString() + " " + message);
 async function heartbeat(extra: Record<string, unknown> = {}) {
@@ -46,12 +51,14 @@ async function heartbeat(extra: Record<string, unknown> = {}) {
         model: selectedModel(),
         last_seen: new Date().toISOString(),
         engine_ready: engineReady,
-        busy,
+        busy: [...executions].some((execution) => execution.current),
         ...extra,
       })
     ).error,
   );
-  if (current) {
+  for (const execution of executions) {
+    const { current, analysisClaimId, taskClaimId } = execution;
+    if (!current) continue;
     const lease = await db
       .from("ai_atlas_queue")
       .update({ lease_until: new Date(Date.now() + 30 * 60_000).toISOString() })
@@ -60,7 +67,11 @@ async function heartbeat(extra: Record<string, unknown> = {}) {
       .eq("status", "running")
       .select("id");
     checkDb(lease.error);
-    if (!lease.data?.length) throw new Error("Worker lease lost");
+    // Completion can race this heartbeat's network request.
+    if (!lease.data?.length) {
+      if (execution.current === current) log("Worker lease no longer active");
+      continue;
+    }
     // Keep the existing domain-level claims alive during CPU inference.
     if (taskClaimId)
       await db
@@ -81,7 +92,13 @@ async function heartbeat(extra: Record<string, unknown> = {}) {
         .eq("status", "analyzing");
   }
 }
+let syncing: Promise<void> | null = null;
 async function sync() {
+  if (syncing) return syncing;
+  syncing = syncOnce().finally(() => { syncing = null; });
+  return syncing;
+}
+async function syncOnce() {
   const directory = process.env.ATLAS_VAULT_PATH;
   if (!directory) return;
   const read = async (table: string, active = false) => {
@@ -148,37 +165,52 @@ async function tick() {
     .eq("user_id", ownerId)
     .maybeSingle();
   checkDb(control.error);
-  process.env.ATLAS_AI_PROVIDER =
-    control.data?.ai_provider === "hermes" ? "hermes" : "ollama";
+  // An in-flight run must keep its provider through every checkpoint.
+  const requestedProvider = control.data?.ai_provider === "hermes" ? "hermes" : "ollama";
+  if (!executions.size) process.env.ATLAS_AI_PROVIDER = requestedProvider;
   engineReady = await providerReady();
   await heartbeat();
   if (control.data?.local_paused) return;
-  if (process.env.ATLAS_INBOX_PATH) {
+  if (requestedProvider !== process.env.ATLAS_AI_PROVIDER) return;
+  const capacity = requestedProvider === "hermes" ? 2 : 1;
+  if (executions.size >= capacity) return;
+  if (executions.size === 0 && Date.now() - lastMaintenance > 60_000) {
+    lastMaintenance = Date.now();
+    if (process.env.ATLAS_INBOX_PATH) {
     const imported = await importInbox(ownerId, process.env.ATLAS_INBOX_PATH);
     if (imported.imported || imported.errors)
       log(
         `Inbox: ${imported.imported} new sources, ${imported.errors} files need review`,
       );
+    }
+    if (engineReady) await catchUp();
   }
   if (!engineReady) return;
-  await catchUp();
-  const next = await db.rpc("ai_atlas_take_job", { p_user_id: ownerId });
+  const next = await db.rpc("ai_atlas_take_job_capacity", {
+    p_user_id: ownerId, p_card_capacity: capacity,
+  });
   checkDb(next.error);
-  current = next.data?.[0] || null;
-  analysisClaimId = null;
-  taskClaimId = null;
+  const current: Job | null = next.data?.[0] || null;
   if (!current) {
-    if (Date.now() - lastSync > 15 * 60_000) await sync();
+    if (!executions.size && Date.now() - lastSync > 15 * 60_000) await sync();
     return;
   }
-  busy = true;
-  await heartbeat({ last_error: null });
-  log("Starting " + current.kind);
+  const execution: Execution = { current, analysisClaimId: null, taskClaimId: null };
+  executions.add(execution);
+  const task = runJob(execution).catch(() => log("작업 상태 저장을 재확인해야 합니다. 만료된 작업은 자동으로 회수합니다."))
+    .finally(() => { executions.delete(execution); pendingExecutions.delete(task); });
+  pendingExecutions.add(task);
+}
+async function runJob(execution: Execution) {
+  let current = execution.current!;
+  let released = false;
   try {
+    await heartbeat({ last_error: null });
+    log(`Starting ${current.kind} ${current.id}`);
     let result: unknown;
     if (current.kind === "analyze" && current.payload.goal === "cards")
       result = await executeCardRun(current, (id) => {
-        analysisClaimId = id;
+        execution.analysisClaimId = id;
       });
     else if (current.kind === "analyze")
       result = await analyzeResource(
@@ -186,7 +218,7 @@ async function tick() {
         String(current.payload.resourceId),
         current.payload.manual === true,
         (id) => {
-          analysisClaimId = id;
+          execution.analysisClaimId = id;
         },
       );
     else if (
@@ -240,7 +272,7 @@ async function tick() {
       };
     } else if (current.kind === "daily") {
       const daily = await runDaily(ownerId, (id) => {
-        taskClaimId = id;
+        execution.taskClaimId = id;
       });
       if (daily.issue?.mode !== "ai")
         throw new AppError(
@@ -258,7 +290,7 @@ async function tick() {
           ? current.payload.sourceId
           : undefined,
         (id) => {
-          taskClaimId = id;
+          execution.taskClaimId = id;
         },
       );
     checkDb(
@@ -288,10 +320,11 @@ async function tick() {
     const completed = current;
     // Release the completed lease before optional downstream work. A wiki quota
     // or vault failure must never requeue an already completed card generation.
-    current = null;
-    analysisClaimId = null;
-    taskClaimId = null;
-    log("Completed " + completed.kind);
+    released = true;
+    execution.current = null;
+    execution.analysisClaimId = null;
+    execution.taskClaimId = null;
+    log(`Completed ${completed.kind} ${completed.id}`);
     if (completed.kind === "analyze" && completed.payload.goal !== "cards")
       await startCards(
         ownerId,
@@ -329,11 +362,10 @@ async function tick() {
         "지식 노트 후속 예약을 보류했습니다. 완료된 제작과 남은 대기열은 유지합니다.",
       );
     }
-    busy = false;
     await sync();
   } catch (e) {
     const message = aiProblem(e);
-    if (current) {
+    if (!released) {
       const retry =
         current.attempts < 3 && (!(e instanceof AppError) || e.status !== 422);
       checkDb(
@@ -353,10 +385,9 @@ async function tick() {
         ).error,
       );
     }
-    current = null;
-    analysisClaimId = null;
-    taskClaimId = null;
-    busy = false;
+    execution.current = null;
+    execution.analysisClaimId = null;
+    execution.taskClaimId = null;
     await heartbeat({ last_error: message });
     log(message);
   }
@@ -406,7 +437,10 @@ async function main() {
           : "연결을 확인하지 못했습니다. 다음 주기에 재시도합니다.",
       );
     }
-    if (!process.argv.includes("--watch")) break;
+    if (!process.argv.includes("--watch")) {
+      await Promise.all(pendingExecutions);
+      break;
+    }
     await pause(5000);
   } while (true);
   await fs.unlink(lockPath);

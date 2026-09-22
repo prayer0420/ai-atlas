@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { LoaderCircle, Play } from "lucide-react";
+import { nodeLabels, type CardRun } from "@/lib/card-workflow";
 type CaptureChannel = "all" | "instagram" | "threads" | "youtube";
 type Job = {
   id: string;
@@ -28,6 +29,17 @@ type Job = {
   } | null;
 };
 type State = {
+  cards?: {
+    total: number;
+    completed: number;
+    images: number;
+    targetImages: number;
+    active: number;
+    queued: number;
+    attention: number;
+    lastCompletedAt: string | null;
+    current: { id: string; title: string; node: CardRun["node"]; updatedAt: string }[];
+  };
   provider: "ollama" | "hermes";
   online: boolean;
   pending: number;
@@ -73,7 +85,7 @@ export function AutomationStatus({
   const load = useCallback(async () => {
     try {
       const next: State = await api("/api/automation");
-      const signature = next.jobs
+      const signature = String(next.cards?.completed ?? "") + ":" + next.jobs
         .filter((j) => j.status === "completed")
         .map((j) => j.id)
         .join(",");
@@ -215,8 +227,20 @@ export function AutomationStatus({
       >
         <span className="processing-dot" />
         <div>
-          <strong>{title}</strong>
-          <p>{hint}</p>
+          <strong>{data?.cards?.total
+            ? `카드뉴스 ${data.cards.completed}/${data.cards.total}건 완성 · 이미지 ${data.cards.images}/${data.cards.targetImages}장`
+            : title}</strong>
+          {data?.cards?.total ? (
+            <>
+              <progress className="card-batch-progress" value={data.cards.completed} max={data.cards.total} aria-label="요청한 카드뉴스 완성 비율" />
+              <p>{error ? "상태 갱신 실패 · 마지막으로 확인한 수량입니다." : data.paused ? (data.cards.active ? "현재 제작을 마치면 일시정지합니다." : "일시정지됨") : !data.online ? "처리 PC 연결 대기" : `제작 중 ${data.cards.active}건`}
+                {` · 대기 ${data.cards.queued}건`}{data.cards.attention ? ` · 확인 필요 ${data.cards.attention}건` : ""}</p>
+              {!error && data.online && data.cards.current.map((item) => (
+                <p className="card-batch-current" key={item.id}>{item.title} · {nodeLabels[item.node]}</p>
+              ))}
+              {data.cards.lastCompletedAt && <small>최근 완성 {new Date(data.cards.lastCompletedAt).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })}</small>}
+            </>
+          ) : <p>{hint}</p>}
         </div>
         <button className="text-button" onClick={onSettings}>
           설정

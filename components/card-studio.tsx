@@ -20,6 +20,7 @@ import {
 
 type ResponseData = {
   run: CardRun | null;
+  publishedRun: CardRun | null;
   stale: boolean;
   events: CardEvent[];
   sources: string[];
@@ -37,11 +38,13 @@ type ResponseData = {
 type Api = (path: string, options?: RequestInit) => Promise<any>;
 function CardImage({
   resourceId,
+  runId,
   index,
   title,
   fetchFile,
 }: {
   resourceId: string;
+  runId: string;
   index: number;
   title: string;
   fetchFile: (path: string) => Promise<Blob>;
@@ -51,7 +54,7 @@ function CardImage({
   useEffect(() => {
     let active = true,
       objectUrl = "";
-    fetchFile(`/api/resources/${resourceId}/cards/asset?index=${index}`)
+    fetchFile(`/api/resources/${resourceId}/cards/asset?run=${runId}&index=${index}`)
       .then((blob) => {
         if (!active) return;
         objectUrl = URL.createObjectURL(blob);
@@ -64,7 +67,7 @@ function CardImage({
       active = false;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [resourceId, index, fetchFile]);
+  }, [resourceId, runId, index, fetchFile]);
   return (
     <figure className="studio-card">
       {url ? (
@@ -148,6 +151,7 @@ export function CardStudio({
     ["queued", "running", "recovering"].includes(run.state) &&
     !result?.stale;
   const complete = run?.state === "completed" && !result?.stale;
+  const published = result?.publishedRun || (complete ? run : null);
   async function start() {
     setBusy(true);
     setError("");
@@ -164,11 +168,12 @@ export function CardStudio({
     }
   }
   async function download() {
+    if (!published) return;
     setBusy(true);
     setError("");
     try {
       const blob = await fetchFile(
-        `/api/resources/${resourceId}/cards/asset?download=all`,
+        `/api/resources/${resourceId}/cards/asset?run=${published.id}&download=all`,
       );
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -195,7 +200,9 @@ export function CardStudio({
               : active
                 ? run.state === "recovering"
                   ? "문제를 고치고 이어서 만들고 있어요"
-                  : "카드뉴스를 만들고 있어요"
+                  : run.state === "queued"
+                    ? "제작 순서를 기다리고 있어요"
+                    : "카드뉴스를 만들고 있어요"
                 : run?.state === "waiting_input" || result?.sourceIssue
                   ? "이 부분을 도와주시면 이어갈 수 있어요"
                   : "이 자료로 카드뉴스를 만들어 보세요"}
@@ -326,6 +333,14 @@ export function CardStudio({
           </details>
         </div>
       )}
+      {published && !complete && (
+        <div className="studio-controls">
+          <p>이전에 완성한 {published.manifest.length}장은 아래에서 계속 볼 수 있습니다. 새 버전의 진행 상태는 위에 표시됩니다.</p>
+          <button className="secondary-button" onClick={download} disabled={busy}>
+            <Download size={17} /> 이전 완성본 모두 받기
+          </button>
+        </div>
+      )}
       {run && (
         <details
           className="studio-process"
@@ -408,17 +423,18 @@ export function CardStudio({
           </details>
         </details>
       )}
-      {complete && run.data.story && (
+      {published?.data.story && (
         <>
           <div className="studio-direction">
-            <p>{run.data.story.direction}</p>
+            <p>{published.data.story.direction}</p>
             <small>{result?.imageMode} · 1080×1350 · 각각의 PNG 파일</small>
           </div>
-          <CardCarousel key={run.id}>
-            {run.data.story.cards.map((card, i) => (
+          <CardCarousel key={published.id}>
+            {published.data.story.cards.map((card, i) => (
               <CardImage
-                key={`${run.id}-${i}`}
+                key={`${published.id}-${i}`}
                 resourceId={resourceId}
+                runId={published.id}
                 index={i}
                 title={card.title || card.copy}
                 fetchFile={fetchFile}
@@ -427,7 +443,7 @@ export function CardStudio({
           </CardCarousel>
           <section className="studio-caption">
             <h3>게시글 캡션</h3>
-            <p>{run.data.story.caption}</p>
+            <p>{published.data.story.caption}</p>
             <h3>출처</h3>
             {result?.sources.map((source) =>
               /^https?:\/\//.test(source) ? (
@@ -439,7 +455,7 @@ export function CardStudio({
               ),
             )}
             <p className="studio-help">{result?.verification}</p>
-            {run.data.story.caveats.map((x, i) => (
+            {published.data.story.caveats.map((x, i) => (
               <p key={i}>{x}</p>
             ))}
           </section>
@@ -449,7 +465,7 @@ export function CardStudio({
               현재 이미지는 편집형 PNG입니다. 사진·콜라주 생성 모델에서 사용할
               수 있는 독립 프롬프트도 함께 제공합니다.
             </p>
-            {run.data.story.cards.map((card, i) => (
+            {published.data.story.cards.map((card, i) => (
               <section key={i}>
                 <h3>
                   {i + 1}장 · {card.role}

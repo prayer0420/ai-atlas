@@ -79,6 +79,20 @@ export async function latestCards(userId: string, resourceId: string) {
     stale: !!run && run.input_hash !== source.content_hash,
   };
 }
+/** Keep a checked result addressable while a newer version is being produced. */
+export async function publishedCards(
+  userId: string,
+  source: { id: string; content_hash: string },
+  runId?: string,
+) {
+  let query = admin().from("ai_atlas_card_runs").select("*")
+    .eq("user_id", userId).eq("resource_id", source.id)
+    .eq("input_hash", source.content_hash).eq("state", "completed");
+  if (runId) query = query.eq("id", runId);
+  const result = await query.order("created_at", { ascending: false }).limit(1).maybeSingle();
+  checkDb(result.error);
+  return result.data as CardRun | null;
+}
 export function assertCardPath(
   userId: string,
   run: CardRun,

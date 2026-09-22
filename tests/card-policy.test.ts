@@ -19,6 +19,7 @@ test("manual cards are unlimited; automatic claims reserve 3x8 per KST day, resu
       "20260922023826_card_goal_workflows.sql",
       "20260922030330_card_goal_queue_failure_sync.sql",
       "20260922051137_card_creation_policy.sql",
+      "20260922054708_parallel_cards_progress.sql",
     ])
       await db.exec(await readFile(`supabase/migrations/${file}`, "utf8"));
     let n = 0;

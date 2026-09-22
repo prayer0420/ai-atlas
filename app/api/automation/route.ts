@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
   try {
     const { db, user } = await authenticate(req);
     ensureOwner(user.email);
-    const [worker, jobs, pending, preferences] = await Promise.all([
+    const [worker, jobs, pending, preferences, cards] = await Promise.all([
       db
         .from("ai_atlas_workers")
         .select("*")
@@ -39,8 +39,9 @@ export async function GET(req: NextRequest) {
         .select("local_paused,ai_provider")
         .eq("user_id", user.id)
         .maybeSingle(),
+      admin().rpc("ai_atlas_card_progress", { p_user_id: user.id }),
     ]);
-    [worker.error, jobs.error, pending.error, preferences.error].forEach(
+    [worker.error, jobs.error, pending.error, preferences.error, cards.error].forEach(
       checkDb,
     );
     return NextResponse.json(
@@ -55,6 +56,7 @@ export async function GET(req: NextRequest) {
         ),
         jobs: jobs.data,
         pending: pending.count || 0,
+        cards: cards.data,
       },
       { headers: { "Cache-Control": "no-store" } },
     );

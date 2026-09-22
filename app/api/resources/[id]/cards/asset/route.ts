@@ -7,7 +7,7 @@ import {
   errorResponse,
   uuid,
 } from "@/lib/server";
-import { CARD_BUCKET, latestCards, assertCardPath } from "@/lib/card-service";
+import { CARD_BUCKET, cardSource, publishedCards, assertCardPath } from "@/lib/card-service";
 import { imagePrompt } from "@/lib/card-workflow";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -18,8 +18,11 @@ export async function GET(
   try {
     const { user } = await authenticate(req);
     const id = uuid.parse((await ctx.params).id);
-    const { run, source, stale } = await latestCards(user.id, id);
-    if (!run || stale || run.state !== "completed")
+    const requestedRun = req.nextUrl.searchParams.get("run");
+    const runId = requestedRun === null ? undefined : uuid.parse(requestedRun);
+    const source = await cardSource(user.id, id);
+    const run = await publishedCards(user.id, source, runId);
+    if (!run)
       throw new AppError("검수가 끝난 카드뉴스가 없습니다.", 409);
     const all = req.nextUrl.searchParams.get("download") === "all";
     const index = Number(req.nextUrl.searchParams.get("index"));
