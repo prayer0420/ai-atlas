@@ -141,7 +141,10 @@ export async function executeCardRun(
           const analyzed = await analyzeResource(
             job.user_id,
             source.id,
-            job.payload.manual === true,
+            // Card jobs already own a queue lease and, when automatic, one of
+            // today's three card slots. Do not charge the legacy analysis
+            // quota as well: manual analyses must not consume automatic slots.
+            true,
             onClaim,
           );
           source = analyzed.resource;
