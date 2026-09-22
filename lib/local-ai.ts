@@ -3,7 +3,7 @@ import { AppError } from "./server";
 import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { providerEnvironment } from "./provider-env";
+import { hermesEnvironment } from "./provider-env";
 export const localModel = () => process.env.OLLAMA_MODEL || "qwen3.5:4b";
 export const selectedProvider = () =>
   process.env.ATLAS_AI_PROVIDER === "hermes" ? "hermes" : "ollama";
@@ -76,7 +76,7 @@ async function hermesStructured<T extends z.ZodType>(
           timeout: 20 * 60_000,
           maxBuffer: 8 * 1024 * 1024,
           windowsHide: true,
-          env: providerEnvironment(process.env),
+          env: hermesEnvironment(process.env),
         },
         (error, stdout) => (error ? reject(error) : resolve(stdout)),
       );
