@@ -70,7 +70,7 @@ node --env-file=.env.local scripts/database.mjs
 node --env-file=.env.local scripts/database.mjs --apply
 ```
 
-인증은 기존 Supabase의 이메일 제공자를 사용합니다. 기본은 이메일 링크 로그인입니다. 비밀번호 로그인·가입도 선택할 수 있습니다. 배포 주소 `https://ai-atlas-two.vercel.app`을 허용된 Redirect URL에 추가했습니다. 기존 Site URL은 유지합니다. 기본 Supabase 메일 발송에는 수신자·횟수 제한이 있을 수 있으며, 다른 사용자를 초대하려면 SMTP와 AI 허용 계정 설정을 별도로 준비해야 합니다.
+사용자는 기존 **아이디·비밀번호**로 로그인합니다. 서버는 아이디를 Supabase 계정에 연결하고, 유효한 세션과 허용 계정을 함께 검사합니다. 무인증 비밀번호 설정·공개 가입은 제공하지 않습니다. 배포 주소 `https://ai-atlas-two.vercel.app`은 허용된 Redirect URL이며 기존 Site URL은 유지합니다. 실제 화면의 사용 순서는 [사용 안내](USER_GUIDE.md)를 참고하세요.
 
 ## Vercel 배포
 

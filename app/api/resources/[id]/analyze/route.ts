@@ -9,6 +9,7 @@ import {
 } from "@/lib/server";
 import { analyzeResource } from "@/lib/analyze-resource";
 import { enqueue, queueLocally } from "@/lib/automation";
+import { withProgress } from "@/lib/resource-progress";
 export const maxDuration = 300;
 export const runtime = "nodejs";
 export async function POST(
@@ -24,19 +25,21 @@ export async function POST(
         .from("ai_atlas_resources")
         .select("*")
         .eq("id", id)
+        .eq("user_id", user.id)
         .is("deleted_at", null)
         .maybeSingle();
       checkDb(r.error);
       if (!r.data) throw new AppError("자료를 찾을 수 없습니다.", 404);
+      const queued = await enqueue(
+        user.id,
+        "analyze",
+        { resourceId: id, manual: true },
+        id,
+      );
       return NextResponse.json(
         {
-          resource: r.data,
-          ...(await enqueue(
-            user.id,
-            "analyze",
-            { resourceId: id, manual: true },
-            id,
-          )),
+          resource: (await withProgress(db, user.id, [r.data]))[0],
+          ...queued,
         },
         { status: 202 },
       );

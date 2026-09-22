@@ -10,6 +10,7 @@ import {
   uuid,
 } from "@/lib/server";
 import { categorySchema } from "@/lib/types";
+import { withProgress } from "@/lib/resource-progress";
 type Context = { params: Promise<{ id: string }> };
 export async function GET(req: NextRequest, ctx: Context) {
   try {
@@ -25,7 +26,7 @@ export async function GET(req: NextRequest, ctx: Context) {
     checkDb(error);
     if (!data) throw new AppError("자료를 찾을 수 없습니다.", 404);
     return NextResponse.json(
-      { resource: data },
+      { resource: (await withProgress(db, user.id, [data]))[0] },
       { headers: { "Cache-Control": "no-store" } },
     );
   } catch (e) {
@@ -57,8 +58,11 @@ export async function PATCH(req: NextRequest, ctx: Context) {
       .maybeSingle();
     checkDb(readError);
     if (!current) throw new AppError("자료를 찾을 수 없습니다.", 404);
-    if (input.raw_text !== undefined && current.status === "analyzing")
-      throw new AppError("분석이 끝난 뒤 본문을 수정해 주세요.", 409);
+    if (input.raw_text !== undefined) {
+      const [progress] = await withProgress(db, user.id, [current]);
+      if (progress.progress.phase === "running")
+        throw new AppError("분석이 끝난 뒤 본문을 수정해 주세요.", 409);
+    }
     const { restore, ...values } = input;
     const update: Record<string, unknown> = { ...values };
     if (restore) update.deleted_at = null;

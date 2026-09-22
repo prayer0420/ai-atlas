@@ -47,13 +47,13 @@ type Props = {
 type Source = { id: string; name: string; kind: string; detail: string };
 const icons = { daily: CalendarDays, wiki: Network, obsidian: FolderSync };
 const names = {
-  daily: "오늘의 AI",
-  wiki: "지식 위키",
+  daily: "새 소식",
+  wiki: "지식 노트",
   obsidian: "Obsidian · Second Brain",
 };
 const intros = {
-  daily: "새로운 소식은 짧게, 쓸모 있는 지식은 오래.",
-  wiki: "흩어진 자료를 연결해 나만의 설명으로 쌓아갑니다.",
+  daily: "공식 출처의 소식을 모아 봅니다. 소셜 자료는 위에서 가져올 수 있어요.",
+  wiki: "여러 자료를 연결한 깊이 있는 설명입니다. 개별 자료의 카드는 ‘내 자료’에서 읽으세요.",
   obsidian: "내 자료를 열린 Markdown 파일로 소유하고, 생각을 이어 쓰세요.",
 };
 const fileHash = async (text: string) =>
@@ -473,7 +473,7 @@ export function BrainPanel({
       <header className="brain-heading">
         <div>
           <div className="eyebrow">
-            <Icon size={15} /> YOUR DAILY KNOWLEDGE RITUAL
+            <Icon size={15} /> AI ATLAS
           </div>
           <h1>
             {names[view]}
@@ -502,7 +502,7 @@ export function BrainPanel({
                   ) : (
                     <RefreshCw size={17} />
                   )}
-                  지금 수집
+                  공식 소식 새로고침
                 </button>
               </>
             ) : view === "wiki" ? (
@@ -518,7 +518,7 @@ export function BrainPanel({
                 ) : (
                   <Sparkles size={17} />
                 )}
-                새 자료를 위키에 정리
+                새 자료 연결하기
               </button>
             ) : (
               <button
@@ -852,7 +852,7 @@ export function BrainPanel({
                             }}
                           >
                             <Network size={17} />
-                            Wiki에서 깊이 읽기
+                            지식 노트에서 이어 읽기
                           </button>
                           {item?.url && (
                             <a
@@ -1026,12 +1026,12 @@ export function BrainPanel({
                     </strong>
                     <p>
                       {relevant.length
-                        ? `이 자료와 연결된 Wiki ${relevant.length}개`
-                        : "연결된 Wiki가 아직 없습니다. 자료로 위키 정리를 실행하면 상세 지식을 연결합니다."}
+                        ? `이 자료와 연결된 지식 노트 ${relevant.length}개`
+                        : "연결된 지식 노트가 아직 없습니다. 새 자료 연결하기를 실행하면 상세 지식을 연결합니다."}
                     </p>
                   </div>
                   <button className="text-button" onClick={onClearSource}>
-                    전체 Wiki 보기
+                    전체 지식 노트 보기
                   </button>
                 </section>
               )}
@@ -1086,14 +1086,14 @@ export function BrainPanel({
                   ) : (
                     <ArrowRight size={18} />
                   )}
-                  답변을 위키에 저장
+                  질문하고 답변 받기
                 </button>
               </form>
               <div className="brain-tabs">
                 {[
                   ["pages", "지식 문서"],
                   ["graph", "연결 지도"],
-                  ["lint", "위키 점검"],
+                  ["lint", "연결 점검"],
                 ].map(([id, label]) => (
                   <button
                     key={id}
@@ -1114,7 +1114,7 @@ export function BrainPanel({
                 />
               ) : wikiTab === "lint" ? (
                 <div className="wiki-lint">
-                  <h2>위키를 오래 쓸 수 있게</h2>
+                  <h2>지식 노트 점검</h2>
                   <p>
                     출처 변경·끊긴 링크·고립 문서와 AI가 남긴 검토 쟁점을
                     확인합니다. 사실 검증이 자동 완료됐다는 의미는 아닙니다.
@@ -1322,7 +1322,7 @@ export function BrainPanel({
                         ))}
                       </div>
                       {revisions && (
-                        <details className="wiki-history" open>
+                        <details className="wiki-history">
                           <summary>저장된 변경 이력</summary>
                           {revisions.map((r) => (
                             <div key={r.revision}>

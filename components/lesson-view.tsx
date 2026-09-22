@@ -21,11 +21,13 @@ import { Diagram } from "./diagram";
 import { readingExcerpt } from "@/lib/reading";
 import { readableText, readableValue } from "@/lib/content-text";
 import { LessonCards } from "./lesson-cards";
+import { learningProgress } from "@/lib/learning-progress";
 export function LessonView({
   resource: r,
   onBack,
   onUpdate,
   onAnalyze,
+  onSaveSource,
   busy,
   onTrash,
   onWiki,
@@ -34,11 +36,14 @@ export function LessonView({
   onBack: () => void;
   onUpdate: (data: Partial<Resource>) => Promise<boolean>;
   onAnalyze: () => void;
+  onSaveSource: (text: string) => Promise<boolean>;
   busy: boolean;
   onTrash: () => void;
   onWiki: () => void;
 }) {
   const [tab, setTab] = useState("brief");
+  const progress = r.progress || learningProgress(r);
+  const inProgress = ["queued", "running"].includes(progress.phase);
   const [answers, setAnswers] = useState<Record<number, number>>({});
   const [notes, setNotes] = useState(r.notes);
   const [raw, setRaw] = useState(readableText(r.raw_text));
@@ -51,7 +56,9 @@ export function LessonView({
   const [detailSection, setDetailSection] = useState<number | null>(null);
   useEffect(() => {
     if (tab === "learn" && detailSection !== null) {
-      document.getElementById(`section-${detailSection}`)?.scrollIntoView({ block: "start" });
+      document
+        .getElementById(`section-${detailSection}`)
+        ?.scrollIntoView({ block: "start" });
       setDetailSection(null);
     }
   }, [tab, detailSection]);
@@ -86,19 +93,28 @@ export function LessonView({
           >
             <Bookmark size={18} fill={r.favorite ? "currentColor" : "none"} />
           </button>
-          {l && (
-            <button className="secondary-button" onClick={exportNote} aria-label="노트 내보내기">
-              <Download size={16} />
-              <span>노트 내보내기</span>
-            </button>
-          )}
-          <button
-            className="icon-button danger"
-            aria-label="휴지통으로 이동"
-            onClick={onTrash}
-          >
-            <Trash2 size={17} />
-          </button>
+          <details className="resource-actions">
+            <summary>더 보기</summary>
+            <div>
+              {l && (
+                <button
+                  className="secondary-button"
+                  onClick={exportNote}
+                  aria-label="노트 내보내기"
+                >
+                  <Download size={16} />
+                  <span>노트 내보내기</span>
+                </button>
+              )}
+              <button
+                className="icon-button danger"
+                aria-label="휴지통으로 이동"
+                onClick={onTrash}
+              >
+                <Trash2 size={17} /> 휴지통으로 이동
+              </button>
+            </div>
+          </details>
         </div>
       </div>
       {r.demo && (
@@ -140,11 +156,17 @@ export function LessonView({
               onClick={() => onUpdate({ learned: !r.learned })}
             >
               <Check size={16} />
-              {r.learned ? "학습 완료됨" : "학습 완료 표시"}
+              {r.learned ? "읽은 자료" : "읽음 표시"}
             </button>
           )}
         </div>
       </div>
+      {l && progress.phase !== "ready" && (
+        <div className="notice" role="status">
+          {progress.label} · {progress.message} 아래에는 이전에 완성된 분석을
+          표시합니다.
+        </div>
+      )}
       <nav className="tabs" aria-label="자료 읽기 방식">
         {[
           ["brief", "카드뉴스"],
@@ -166,36 +188,69 @@ export function LessonView({
         {tab === "brief" && (
           <div className="brief-layout">
             {l ? (
-              <LessonCards key={r.id + r.updated_at} lesson={l} sourceUrl={r.source_url} onDetail={(section) => {
-                setTab("learn");
-                setDetailSection(section);
-              }} />
+              <LessonCards
+                key={r.id + r.updated_at}
+                lesson={l}
+                sourceUrl={r.source_url}
+                onDetail={(section) => {
+                  setTab("learn");
+                  setDetailSection(section);
+                }}
+              />
             ) : (
-              <section className="brief-pending">
+              <section
+                className={"brief-pending progress-" + progress.phase}
+                role="status"
+              >
                 <BookOpen size={32} />
-                <h2>{r.status === "analyzing" ? "상세분석과 카드뉴스를 만들고 있어요" : r.status === "needs_content" ? "링크의 본문을 확보하지 못했어요" : r.status === "failed" ? "분석을 완료하지 못했어요" : "아직 카드뉴스가 만들어지지 않았어요"}</h2>
-                <p>{r.raw_text?.trim() ? `저장된 원문 ${readableText(r.raw_text).length.toLocaleString("ko-KR")}자를 바탕으로 분석합니다. 완료되면 카드뉴스와 상세분석이 함께 표시됩니다.` : "현재는 링크만 저장되어 있습니다. 본문 확보에 실패하면 내용을 추측해 채우지 않습니다."}</p>
-                <div className="brief-next-actions">
-                  <button
-                    className="primary-button"
-                    onClick={() => setTab("source")}
-                  >
-                    {r.raw_text?.trim() ? "저장한 원문 확인" : "본문 직접 추가"}
-                  </button>
-                  <button
-                    className="secondary-button"
-                    disabled={busy}
-                    onClick={onAnalyze}
-                  >
-                    {busy ? "요청 중…" : r.status === "analyzing" ? "분석 상태 확인·재시도" : "카드뉴스·상세분석 만들기"}
-                  </button>
-                  <button className="text-button" onClick={onWiki}>
-                    관련 Wiki 확인
-                  </button>
-                </div>
-                {r.error_message && (
+                <span className="progress-label">{progress.label}</span>
+                <h2>
+                  {progress.phase === "queued"
+                    ? "요청을 저장했어요. 차례를 기다리고 있습니다."
+                    : progress.phase === "running"
+                      ? "카드와 상세 분석을 만들고 있어요"
+                      : progress.phase === "needs_content"
+                        ? "본문을 추가하면 이어서 정리할 수 있어요"
+                        : progress.phase === "failed"
+                          ? "정리가 중단됐어요. 다시 시도할 수 있습니다."
+                          : "원문을 저장했어요. 이제 정리해 볼까요?"}
+                </h2>
+                <p>{progress.message}</p>
+                <ol className="learning-steps" aria-label="자료 처리 단계">
+                  <li className="done">저장 완료</li>
+                  <li className={inProgress ? "current" : ""}>원문 분석</li>
+                  <li>카드·상세 분석</li>
+                </ol>
+                {r.error_message && progress.phase !== "queued" && (
                   <p className="brief-pending-reason">{r.error_message}</p>
                 )}
+                <div className="brief-next-actions">
+                  {progress.action && (
+                    <button
+                      className="primary-button"
+                      disabled={busy}
+                      onClick={
+                        progress.action === "source"
+                          ? () => setTab("source")
+                          : onAnalyze
+                      }
+                    >
+                      {busy
+                        ? "요청 중…"
+                        : progress.action === "source"
+                          ? "본문 추가"
+                          : progress.phase === "saved"
+                            ? "정리 시작"
+                            : "다시 시도"}
+                    </button>
+                  )}
+                  <button
+                    className="text-button"
+                    onClick={() => setTab("source")}
+                  >
+                    저장한 원문 보기
+                  </button>
+                </div>
               </section>
             )}
           </div>
@@ -209,7 +264,7 @@ export function LessonView({
                     <h2>전체 요약과 맥락</h2>
                     <p>{l.summary}</p>
                     <button className="text-button" onClick={onWiki}>
-                      이 자료를 연결한 Wiki 읽기 <ArrowUpRight size={16} />
+                      연결된 지식 노트 읽기 <ArrowUpRight size={16} />
                     </button>
                   </section>
                   <section className="takeaways">
@@ -368,29 +423,24 @@ export function LessonView({
               ) : (
                 <div className="empty-state">
                   <BookOpen size={38} />
-                  <h2>
-                    {r.status === "needs_content"
-                      ? "본문이 더 필요해요"
-                      : "학습 노트를 만들어 보세요"}
-                  </h2>
-                  <p>
-                    {r.error_message ||
-                      "원문을 분석해 핵심 개념, 시각화, 실습과 복습 문제로 정리합니다."}
-                  </p>
+                  <h2>{progress.label}</h2>
+                  <p>{progress.message}</p>
                   <button
                     className="primary-button"
                     onClick={
-                      r.status === "needs_content"
+                      progress.action === "source"
                         ? () => setTab("source")
                         : onAnalyze
                     }
-                    disabled={busy}
+                    disabled={busy || inProgress}
                   >
                     {busy
-                      ? "분석 중…"
-                      : r.status === "needs_content"
-                        ? "원문 추가하기"
-                        : "AI로 학습 노트 만들기"}
+                      ? "요청 중…"
+                      : inProgress
+                        ? progress.label
+                        : progress.action === "source"
+                          ? "본문 추가"
+                          : "정리 시작"}
                   </button>
                 </div>
               )}
@@ -440,7 +490,7 @@ export function LessonView({
                 {l && !r.demo && (
                   <button
                     className="text-button"
-                    disabled={busy}
+                    disabled={busy || inProgress}
                     onClick={onAnalyze}
                   >
                     <RefreshCw size={14} />
@@ -453,64 +503,66 @@ export function LessonView({
         )}
         {tab === "source" && (
           <div className="editor-section">
-            <h2>자료 정보</h2>
-            <div className="metadata-editor">
-              <label htmlFor="edit-title">제목</label>
-              <input
-                id="edit-title"
-                value={editTitle}
-                maxLength={120}
-                onChange={(e) => {
-                  setEditTitle(e.target.value);
-                  setSaved(false);
-                }}
-              />
-              <label htmlFor="edit-category">분야</label>
-              <select
-                id="edit-category"
-                value={editCategory}
-                onChange={(e) => {
-                  setEditCategory(e.target.value);
-                  setSaved(false);
-                }}
-              >
-                {categories.map((c) => (
-                  <option key={c}>{c}</option>
-                ))}
-              </select>
-              <label htmlFor="edit-tags">태그 · 쉼표로 구분</label>
-              <input
-                id="edit-tags"
-                value={editTags}
-                onChange={(e) => {
-                  setEditTags(e.target.value);
-                  setSaved(false);
-                }}
-              />
-              <button
-                className="secondary-button"
-                disabled={busy || !editTitle.trim()}
-                onClick={async () =>
-                  setSaved(
-                    await onUpdate({
-                      title: editTitle,
-                      category: editCategory,
-                      tags: [
-                        ...new Set(
-                          editTags
-                            .split(",")
-                            .map((t) => t.trim())
-                            .filter(Boolean),
-                        ),
-                      ].slice(0, 8),
-                    }),
-                  )
-                }
-              >
-                <Save size={16} />
-                자료 정보 저장
-              </button>
-            </div>
+            <details className="metadata-details">
+              <summary>제목·분류·태그 수정</summary>
+              <div className="metadata-editor">
+                <label htmlFor="edit-title">제목</label>
+                <input
+                  id="edit-title"
+                  value={editTitle}
+                  maxLength={120}
+                  onChange={(e) => {
+                    setEditTitle(e.target.value);
+                    setSaved(false);
+                  }}
+                />
+                <label htmlFor="edit-category">분야</label>
+                <select
+                  id="edit-category"
+                  value={editCategory}
+                  onChange={(e) => {
+                    setEditCategory(e.target.value);
+                    setSaved(false);
+                  }}
+                >
+                  {categories.map((c) => (
+                    <option key={c}>{c}</option>
+                  ))}
+                </select>
+                <label htmlFor="edit-tags">태그 · 쉼표로 구분</label>
+                <input
+                  id="edit-tags"
+                  value={editTags}
+                  onChange={(e) => {
+                    setEditTags(e.target.value);
+                    setSaved(false);
+                  }}
+                />
+                <button
+                  className="secondary-button"
+                  disabled={busy || !editTitle.trim()}
+                  onClick={async () =>
+                    setSaved(
+                      await onUpdate({
+                        title: editTitle,
+                        category: editCategory,
+                        tags: [
+                          ...new Set(
+                            editTags
+                              .split(",")
+                              .map((t) => t.trim())
+                              .filter(Boolean),
+                          ),
+                        ].slice(0, 8),
+                      }),
+                    )
+                  }
+                >
+                  <Save size={16} />
+                  자료 정보 저장
+                </button>
+              </div>
+            </details>
             <h2>원문과 출처</h2>
             {r.source_url && (
               <a
@@ -533,6 +585,7 @@ export function LessonView({
               rows={16}
               value={raw}
               maxLength={60000}
+              disabled={busy || inProgress}
               onChange={(e) => {
                 setRaw(e.target.value);
                 setSaved(false);
@@ -542,12 +595,11 @@ export function LessonView({
               <span>{raw.length.toLocaleString()} / 60,000자</span>
               <button
                 className="primary-button"
-                disabled={busy || raw === r.raw_text}
-                onClick={async () =>
-                  setSaved(await onUpdate({ raw_text: raw }))
-                }
+                disabled={busy || inProgress || raw.trim().length < 80}
+                onClick={async () => setSaved(await onSaveSource(raw))}
               >
-                <Save size={16} /> {saved ? "저장됨" : "본문 저장"}
+                <Save size={16} />{" "}
+                {busy ? "요청 중…" : "본문 저장하고 정리하기"}
               </button>
             </div>
           </div>

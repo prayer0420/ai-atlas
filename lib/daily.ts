@@ -149,7 +149,7 @@ export async function archiveFeed(userId: string, feedId: string) {
   );
   return id;
 }
-export async function runDaily(userId: string) {
+export async function runDaily(userId: string, onClaim?: (id: string) => void) {
   const db = admin(),
     prefs = await preferences(userId),
     date = kstDate();
@@ -191,6 +191,7 @@ export async function runDaily(userId: string) {
     checkDb(issue.error);
     return { issue: issue.data, cached: true };
   }
+  if (job.id) onClaim?.(job.id);
   try {
     const results = await collectFeeds(prefs);
     const report = results.map((r) => ({

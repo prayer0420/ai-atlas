@@ -28,7 +28,7 @@ export async function enqueue(
     job_id: result.data,
     message:
       kind === "analyze" && payload.manual === true
-        ? "수동 자료를 최우선으로 학습하고 있습니다. 연결된 PC가 켜져 있으면 곧 완료됩니다."
-        : "무료 AI 작업을 예약했습니다. 연결된 PC가 켜지면 자동으로 처리합니다.",
+        ? "정리 요청을 저장했습니다. 연결된 PC에서 수동 자료를 우선 처리합니다."
+        : "작업을 예약했습니다. 연결된 PC에서 순서대로 처리합니다.",
   };
 }

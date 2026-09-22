@@ -2,7 +2,12 @@ import { admin, checkDb, AppError, dailyLimit } from "./server";
 import { extract } from "./extract";
 import { createLesson } from "./analyze";
 import { readableText, sourceProblem } from "./content-text";
-export async function analyzeResource(ownerId: string, id: string, manual = false) {
+export async function analyzeResource(
+  ownerId: string,
+  id: string,
+  manual = false,
+  onClaim?: (jobId: string) => void,
+) {
   let jobId: string | undefined;
   let resourceId: string | undefined;
   let userId: string | undefined;
@@ -44,6 +49,7 @@ export async function analyzeResource(ownerId: string, id: string, manual = fals
       checkDb(claimError);
     }
     jobId = claim as string;
+    onClaim?.(jobId);
     // Read the input after taking the database claim so concurrent edits cannot
     // make the analysis use a snapshot from before the claim.
     const { data: claimed, error: claimedError } = await admin()

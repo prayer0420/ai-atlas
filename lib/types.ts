@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { lessonCardsSchema } from "./lesson-cards";
+import type { LearningProgress } from "./learning-progress";
 export const categories = [
   "AI 기초",
   "프롬프트",
@@ -82,6 +83,8 @@ export const lessonSchema = z.object({
 });
 export type Lesson = z.infer<typeof lessonSchema>;
 export type Resource = {
+  progress?: LearningProgress;
+  analysis_started_at?: string | null;
   summary?: string;
   visual?: Lesson["diagram"] | null;
   id: string;

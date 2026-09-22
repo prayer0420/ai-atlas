@@ -51,6 +51,7 @@ export async function compileWiki(
   userId: string,
   question?: string,
   sourceId?: string,
+  onClaim?: (id: string) => void,
 ) {
   if (queueLocally())
     return enqueue(userId, question ? "question" : "wiki", {
@@ -166,6 +167,7 @@ export async function compileWiki(
       cached: true,
       message: "이미 저장된 정리 결과입니다.",
     };
+  onClaim?.(job.id);
   try {
     const related = pages
       .filter(

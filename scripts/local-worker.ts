@@ -23,6 +23,8 @@ let ownerId = "",
   busy = false,
   engineReady = false,
   lastSync = 0;
+let analysisClaimId: string | null = null;
+let taskClaimId: string | null = null;
 let current: {
   id: string;
   lease_token: string;
@@ -37,16 +39,14 @@ async function heartbeat(extra: Record<string, unknown> = {}) {
   if (!ownerId) return;
   checkDb(
     (
-      await db
-        .from("ai_atlas_workers")
-        .upsert({
-          user_id: ownerId,
-          model: selectedModel(),
-          last_seen: new Date().toISOString(),
-          engine_ready: engineReady,
-          busy,
-          ...extra,
-        })
+      await db.from("ai_atlas_workers").upsert({
+        user_id: ownerId,
+        model: selectedModel(),
+        last_seen: new Date().toISOString(),
+        engine_ready: engineReady,
+        busy,
+        ...extra,
+      })
     ).error,
   );
   if (current) {
@@ -60,17 +60,22 @@ async function heartbeat(extra: Record<string, unknown> = {}) {
     checkDb(lease.error);
     if (!lease.data?.length) throw new Error("Worker lease lost");
     // Keep the existing domain-level claims alive during CPU inference.
-    await db
-      .from("ai_atlas_tasks")
-      .update({ started_at: new Date().toISOString() })
-      .eq("user_id", ownerId)
-      .eq("status", "running");
-    if (current.kind === "analyze")
+    if (taskClaimId)
+      await db
+        .from("ai_atlas_tasks")
+        .update({ started_at: new Date().toISOString() })
+        .eq("id", taskClaimId)
+        .eq("user_id", ownerId)
+        .eq("status", "running");
+    // Never renew a previous attempt before the new attempt owns its claim.
+    // Doing so makes every retry fail with ALREADY_RUNNING indefinitely.
+    if (current.kind === "analyze" && analysisClaimId)
       await db
         .from("ai_atlas_resources")
         .update({ analysis_started_at: new Date().toISOString() })
         .eq("id", current.payload.resourceId)
         .eq("user_id", ownerId)
+        .eq("analysis_job_id", analysisClaimId)
         .eq("status", "analyzing");
   }
 }
@@ -158,6 +163,8 @@ async function tick() {
   const next = await db.rpc("ai_atlas_take_job", { p_user_id: ownerId });
   checkDb(next.error);
   current = next.data?.[0] || null;
+  analysisClaimId = null;
+  taskClaimId = null;
   if (!current) {
     if (Date.now() - lastSync > 15 * 60_000) await sync();
     return;
@@ -172,20 +179,27 @@ async function tick() {
         ownerId,
         String(current.payload.resourceId),
         current.payload.manual === true,
+        (id) => {
+          analysisClaimId = id;
+        },
       );
     else if (
       current.kind === "daily" &&
       current.payload.action === "manual-collect"
     ) {
-      const channel = (["all", "instagram", "threads", "youtube"] as const).includes(current.payload.channel as CaptureChannel)
+      const channel = (
+        ["all", "instagram", "threads", "youtube"] as const
+      ).includes(current.payload.channel as CaptureChannel)
         ? (current.payload.channel as CaptureChannel)
         : "all";
-      const personal = channel === "youtube"
-        ? null
-        : await syncPersonalSocial(channel === "all" ? "all" : channel);
-      const youtube = channel === "instagram" || channel === "threads"
-        ? null
-        : await collectAside(undefined, undefined, "youtube", true);
+      const personal =
+        channel === "youtube"
+          ? null
+          : await syncPersonalSocial(channel === "all" ? "all" : channel);
+      const youtube =
+        channel === "instagram" || channel === "threads"
+          ? null
+          : await collectAside(undefined, undefined, "youtube", true);
       const imported = process.env.ATLAS_INBOX_PATH
         ? await importInbox(ownerId, process.env.ATLAS_INBOX_PATH, true)
         : { imported: 0, errors: 0 };
@@ -204,14 +218,24 @@ async function tick() {
         ],
         failures: [
           ...(personal && ["failed", "locked"].includes(personal.status)
-            ? [{ platform: "personal-social", stage: personal.status === "locked" ? "collection_locked" : "collection_failed" }]
+            ? [
+                {
+                  platform: "personal-social",
+                  stage:
+                    personal.status === "locked"
+                      ? "collection_locked"
+                      : "collection_failed",
+                },
+              ]
             : []),
           ...(youtube?.failures || []),
         ],
         checked_at: new Date().toISOString(),
       };
     } else if (current.kind === "daily") {
-      const daily = await runDaily(ownerId);
+      const daily = await runDaily(ownerId, (id) => {
+        taskClaimId = id;
+      });
       if (daily.issue?.mode !== "ai")
         throw new AppError(
           daily.issue?.warning || "카드뉴스 AI 정리를 완료하지 못했습니다.",
@@ -227,6 +251,9 @@ async function tick() {
         typeof current.payload.sourceId === "string"
           ? current.payload.sourceId
           : undefined,
+        (id) => {
+          taskClaimId = id;
+        },
       );
     checkDb(
       (
@@ -257,7 +284,8 @@ async function tick() {
     )
       await enqueue(ownerId, "wiki");
     if (
-      (current.kind === "daily" && current.payload.action !== "manual-collect") ||
+      (current.kind === "daily" &&
+        current.payload.action !== "manual-collect") ||
       current.kind === "analyze"
     ) {
       const prefs = await db
@@ -268,6 +296,8 @@ async function tick() {
       if (prefs.data?.auto_wiki) await enqueue(ownerId, "wiki");
     }
     current = null;
+    analysisClaimId = null;
+    taskClaimId = null;
     busy = false;
     await sync();
   } catch (e) {
@@ -291,6 +321,8 @@ async function tick() {
       );
     }
     current = null;
+    analysisClaimId = null;
+    taskClaimId = null;
     busy = false;
     await heartbeat({ last_error: message });
     log(message);

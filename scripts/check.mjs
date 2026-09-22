@@ -11,6 +11,10 @@ console.log(
   JSON.stringify({ database: config.database, ai: config.ai }),
 );
 const routes = [
+  ["POST", "/api/auth/setup"],
+  ["GET", "/api/account"],
+  ["GET", "/api/automation"],
+  ["GET", "/api/brain"],
   ["GET", "/api/resources"],
   ["POST", "/api/resources"],
   ["GET", "/api/resources/11111111-1111-4111-8111-111111111111"],

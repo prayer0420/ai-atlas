@@ -4,6 +4,7 @@ import "./brain.css";
 import "./reading.css";
 import "./editorial.css";
 import "./lesson-cards.css";
+import "./simple.css";
 export const metadata: Metadata = {
   title: "AI Atlas · 나만의 AI 지식 지도",
   description:

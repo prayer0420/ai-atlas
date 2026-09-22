@@ -57,7 +57,7 @@ import { LessonView } from "./lesson-view";
 import { readingExcerpt } from "@/lib/reading";
 import dynamic from "next/dynamic";
 import { AutomationStatus } from "./automation-status";
-import { ReadingDesk } from "./reading-desk";
+import { learningProgress } from "@/lib/learning-progress";
 import { PasswordSettings } from "./password-settings";
 const BrainPanel = dynamic(() =>
   import("./brain-panel").then((module) => module.BrainPanel),
@@ -73,13 +73,6 @@ type View =
   | "daily"
   | "wiki"
   | "obsidian";
-const statusNames = {
-  saved: "분석 대기",
-  analyzing: "분석 중",
-  ready: "학습 노트",
-  needs_content: "본문 필요",
-  failed: "다시 확인",
-};
 function SourceIcon({ type }: { type: string }) {
   return type === "youtube" ? (
     <Youtube size={15} />
@@ -103,6 +96,8 @@ export function Workspace() {
   const [category, setCategory] = useState("전체");
   const [query, setQuery] = useState("");
   const [source, setSource] = useState("all");
+  const [stateFilter, setStateFilter] = useState("all");
+  const [addAdvanced, setAddAdvanced] = useState(false);
   const [sort, setSort] = useState("new");
   const [layout, setLayout] = useState("grid");
   const [navOpen, setNavOpen] = useState(false);
@@ -132,10 +127,18 @@ export function Workspace() {
   useEffect(() => {
     const handleKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") setNavOpen(false);
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k" && searchInput.current && !dialog) {
+      if (
+        (event.ctrlKey || event.metaKey) &&
+        event.key.toLowerCase() === "k" &&
+        searchInput.current &&
+        !dialog
+      ) {
         event.preventDefault();
         searchInput.current.focus();
-        searchInput.current.scrollIntoView({ block: "center", behavior: "auto" });
+        searchInput.current.scrollIntoView({
+          block: "center",
+          behavior: "auto",
+        });
       }
     };
     window.addEventListener("keydown", handleKey);
@@ -259,30 +262,36 @@ export function Workspace() {
     },
     [client],
   );
-  const load = useCallback(async () => {
-    if (!session || ["daily", "wiki", "obsidian"].includes(view)) return;
-    const version = ++loadVersion.current;
-    setLoading(true);
-    setError("");
-    try {
-      const p = new URLSearchParams({
-        q: query,
-        category,
-        source,
-        view,
-        sort,
-        page: String(page),
-      });
-      const data = await api("/api/resources?" + p);
-      if (version !== loadVersion.current) return;
-      setResources(data.resources);
-      setTotal(data.total);
-    } catch (e) {
-      if (version === loadVersion.current) setError((e as Error).message);
-    } finally {
-      if (version === loadVersion.current) setLoading(false);
-    }
-  }, [api, session, query, category, source, view, sort, page]);
+  const load = useCallback(
+    async (quiet = false) => {
+      if (!session || ["daily", "wiki", "obsidian"].includes(view)) return;
+      const version = ++loadVersion.current;
+      if (!quiet) {
+        setLoading(true);
+        setError("");
+      }
+      try {
+        const p = new URLSearchParams({
+          q: query,
+          category,
+          source,
+          view,
+          sort,
+          state: stateFilter,
+          page: String(page),
+        });
+        const data = await api("/api/resources?" + p);
+        if (version !== loadVersion.current) return;
+        setResources(data.resources);
+        setTotal(data.total);
+      } catch (e) {
+        if (version === loadVersion.current) setError((e as Error).message);
+      } finally {
+        if (version === loadVersion.current) setLoading(false);
+      }
+    },
+    [api, session, query, category, source, view, sort, page, stateFilter],
+  );
   useEffect(() => {
     if (!authReady || deepLinkHandled.current) return;
     const p = new URLSearchParams(window.location.search),
@@ -324,19 +333,52 @@ export function Workspace() {
   }, [dialog]);
   useEffect(() => {
     setPage(0);
-  }, [query, category, source, view, sort]);
+  }, [query, category, source, view, sort, stateFilter]);
   useEffect(() => {
-    if (!session || !resources.some((r) => r.status === "analyzing")) return;
-    const timer = setInterval(load, 10000);
+    if (!session) return;
+    const timer = setInterval(() => {
+      if (document.visibilityState === "visible") void load(true);
+    }, 5000);
     return () => clearInterval(timer);
-  }, [resources, session, load]);
+  }, [session, load]);
   const automationUpdated = useCallback(() => {
-    void load();
+    void load(true);
   }, [load]);
+  useEffect(() => {
+    if (
+      !selected ||
+      selected.demo ||
+      !["queued", "running"].includes(
+        (selected.progress || learningProgress(selected)).phase,
+      )
+    )
+      return;
+    let live = true;
+    const timer = setInterval(() => {
+      if (document.visibilityState !== "visible") return;
+      void api("/api/resources/" + selected.id)
+        .then((result) => {
+          if (live)
+            setSelected((current) =>
+              current?.id === selected.id ? result.resource : current,
+            );
+        })
+        .catch(() => {});
+    }, 5000);
+    return () => {
+      live = false;
+      clearInterval(timer);
+    };
+  }, [selected, api]);
   useEffect(() => {
     if (!selected || selected.demo) return;
     const updated = resources.find((r) => r.id === selected.id);
-    if (!updated || updated.updated_at === selected.updated_at) return;
+    if (
+      !updated ||
+      (updated.updated_at === selected.updated_at &&
+        updated.progress?.phase === selected.progress?.phase)
+    )
+      return;
     let live = true;
     void api("/api/resources/" + selected.id)
       .then((r) => {
@@ -355,6 +397,9 @@ export function Workspace() {
     setSelected(null);
     setNavOpen(false);
     setQuery("");
+    setSource("all");
+    setStateFilter("all");
+    setPage(0);
   }
   function requireAuth() {
     setAuthMessage("");
@@ -413,16 +458,13 @@ export function Workspace() {
     setBusy(true);
     setAnalyzing(true);
     setError("");
-    setResources((items) =>
-      items.map((x) => (x.id === id ? { ...x, status: "analyzing" } : x)),
-    );
-    notify("수동 자료를 바로 학습하기 시작했습니다.");
+    notify("정리 요청을 보내고 있어요.");
     try {
       const data = await api(`/api/resources/${id}/analyze`, {
         method: "POST",
       });
-      setSelected(data.resource);
-      await load();
+      setSelected((current) => (current?.id === id ? data.resource : current));
+      await load(true);
       notify(
         data.queued
           ? data.message
@@ -435,7 +477,9 @@ export function Workspace() {
       setError((e as Error).message);
       try {
         const data = await api("/api/resources/" + id);
-        setSelected(data.resource);
+        setSelected((current) =>
+          current?.id === id ? data.resource : current,
+        );
       } catch {}
     } finally {
       setBusy(false);
@@ -457,6 +501,7 @@ export function Workspace() {
           title: addTitle,
           url: addType === "link" ? addUrl : "",
           text: addText,
+          analyze: autoAnalyze,
         }),
       });
       setDialog(null);
@@ -470,7 +515,17 @@ export function Workspace() {
           ? "이미 저장한 자료를 열었어요."
           : "자료를 저장했습니다.",
       );
-      if (autoAnalyze && config?.ai && !data.duplicate)
+      if (data.queueError) setError(data.queueError);
+      else if (data.queued)
+        notify(
+          "자료를 저장하고 정리를 예약했어요. 완료되면 자동으로 표시됩니다.",
+        );
+      else if (
+        autoAnalyze &&
+        config?.ai &&
+        config.aiMode !== "local" &&
+        !data.duplicate
+      )
         await analyze(data.resource.id);
     } catch (e) {
       setError((e as Error).message);
@@ -495,13 +550,15 @@ export function Workspace() {
         body: JSON.stringify(creds),
       });
       const tokens = await response.json();
-      if (!response.ok) throw new Error(tokens.error || "로그인하지 못했습니다.");
+      if (!response.ok)
+        throw new Error(tokens.error || "로그인하지 못했습니다.");
       const { data, error } = await client.auth.setSession(tokens);
       if (error) throw error;
       if (data.session) {
         setDialog(null);
         notify("내 자료실에 연결했습니다.");
-      } else setAuthMessage("로그인하지 못했습니다. 잠시 후 다시 시도해 주세요.");
+      } else
+        setAuthMessage("로그인하지 못했습니다. 잠시 후 다시 시도해 주세요.");
     } catch (e) {
       const msg = (e as Error).message;
       setAuthMessage(
@@ -556,7 +613,13 @@ export function Workspace() {
           (view !== "favorites" || r.favorite) &&
           (view !== "learned" || r.learned) &&
           (view !== "inbox" || r.status !== "ready") &&
-          view !== "trash",
+          view !== "trash" &&
+          (stateFilter === "all" ||
+            (stateFilter === "ready"
+              ? r.status === "ready"
+              : stateFilter === "pending"
+                ? ["saved", "analyzing"].includes(r.status)
+                : ["failed", "needs_content"].includes(r.status))),
       )
     : resources;
   if (isDemo && sort === "title")
@@ -567,25 +630,26 @@ export function Workspace() {
     category !== "전체"
       ? category
       : {
-          library: "지식 라이브러리",
+          library: "내 자료",
           favorites: "즐겨찾기",
           learned: "학습 완료",
-          inbox: "수집함",
+          inbox: "정리할 자료",
           map: "분야별 지식 지도",
           trash: "휴지통",
-          settings: "연결 설정",
-          daily: "오늘의 AI",
-          wiki: "지식 위키",
+          settings: "설정",
+          daily: "새 소식",
+          wiki: "지식 노트",
           obsidian: "Obsidian · Second Brain",
         }[view];
-  if (!authReady) return (
-    <main className="loading-state" aria-busy="true" aria-live="polite">
-      <LoaderCircle className="spin" />
-      <p>내 자료실에 연결하고 있어요.</p>
-    </main>
-  );
+  if (!authReady)
+    return (
+      <main className="loading-state" aria-busy="true" aria-live="polite">
+        <LoaderCircle className="spin" />
+        <p>내 자료실에 연결하고 있어요.</p>
+      </main>
+    );
   return (
-    <div className="app-shell">
+    <div className="app-shell simple-workspace">
       <a className="skip-link" href="#main">
         본문으로 건너뛰기
       </a>
@@ -597,104 +661,81 @@ export function Workspace() {
         />
       )}
       <aside className={`sidebar ${navOpen ? "open" : ""}`}>
-        <button className="mobile-nav-close" aria-label="사이드바 닫기" onClick={() => setNavOpen(false)}><X size={20} /></button>
+        <button
+          className="mobile-nav-close"
+          aria-label="사이드바 닫기"
+          onClick={() => setNavOpen(false)}
+        >
+          <X size={20} />
+        </button>
         <button className="brand" onClick={() => navigate("library")}>
           <span className="brand-mark">
             A<span />
           </span>
           <span>
-            atlas<small>A PERSONAL FIELD GUIDE</small>
+            atlas<small>모으고, 읽고, 이해하기</small>
           </span>
         </button>
-        <button
-          className="new-resource"
-          onClick={() => (session ? setDialog("add") : requireAuth())}
-        >
-          <Plus size={19} /> 자료 추가<span>＋</span>
-        </button>
-        <div className="nav-label">WORKSPACE</div>
-        <nav>
+        <div className="nav-label">나의 공간</div>
+        <nav aria-label="주요 메뉴">
           {(
             [
-              ["library", BookOpen, "지식 라이브러리"],
-              ["daily", CalendarDays, "오늘의 AI"],
-              ["wiki", Network, "지식 위키"],
-              ["obsidian", FolderSync, "Obsidian 보관함"],
-              ["inbox", FolderOpen, "수집함"],
-              ["favorites", Bookmark, "즐겨찾기"],
-              ["learned", Check, "학습 완료"],
-              ["map", Network, "지식 지도"],
+              ["library", BookOpen, "내 자료"],
+              ["daily", CalendarDays, "새 소식"],
+              ["wiki", Network, "지식 노트"],
             ] as const
           ).map(([id, Icon, label]) => (
             <button
               key={id}
-              className={view === id && category === "전체" ? "selected" : ""}
+              className={view === id ? "selected" : ""}
+              aria-current={view === id ? "page" : undefined}
               onClick={() => navigate(id)}
             >
               <Icon size={19} />
               {label}
-              {id === "library" && isDemo && (
-                <span className="nav-count">4</span>
-              )}
             </button>
           ))}
         </nav>
-        <div className="nav-label category-label">
-          분야별 모아보기 <Layers size={13} />
-        </div>
-        <nav className="category-nav">
-          {categories.map((c, i) => (
-            <button
-              key={c}
-              onClick={() => navigate("library", c)}
-              className={category === c ? "selected" : ""}
-            >
-              <span className={`category-dot dot-${i}`} />
-              {c}
-            </button>
-          ))}
-        </nav>
+        <details className="nav-more">
+          <summary>
+            더 보기 <ChevronDown size={15} />
+          </summary>
+          <nav aria-label="보관한 자료">
+            {(
+              [
+                ["favorites", Bookmark, "즐겨찾기"],
+                ["learned", Check, "읽은 자료"],
+                ["inbox", FolderOpen, "정리할 자료"],
+                ["map", Network, "분야별 탐색"],
+                ["trash", Trash2, "휴지통"],
+              ] as const
+            ).map(([id, Icon, label]) => (
+              <button
+                key={id}
+                className={view === id ? "selected" : ""}
+                onClick={() => navigate(id)}
+              >
+                <Icon size={18} />
+                {label}
+              </button>
+            ))}
+          </nav>
+        </details>
         <div className="sidebar-bottom">
-          <div className="sidebar-note">
-            <Sparkles size={19} />
-            <strong>
-              모아둔 정보가
-              <br />
-              나만의 지식이 되는 곳
-            </strong>
-            <p>
-              한 번 저장하고,
-              <br />
-              여러 번 꺼내 배우세요.
-            </p>
-          </div>
           <nav>
-            <button
-              onClick={() => navigate("trash")}
-              className={view === "trash" ? "selected" : ""}
-            >
-              <Trash2 size={17} />
-              휴지통
-            </button>
             <button
               onClick={() => navigate("settings")}
               className={view === "settings" ? "selected" : ""}
             >
-              <Settings2 size={17} />
-              연결 설정
+              <Settings2 size={18} />
+              설정
             </button>
           </nav>
           <button
             className="profile"
-            onClick={
-              session
-                ? () => navigate("settings")
-                : requireAuth
-            }
+            onClick={session ? () => navigate("settings") : requireAuth}
           >
-            <span className="avatar">
-              A
-            </span>
+            <span className="avatar">A</span>
             <span>
               <strong>{session ? "나의 자료실" : "체험 자료실"}</strong>
               <small>
@@ -715,15 +756,21 @@ export function Workspace() {
             >
               <Menu size={20} />
             </button>
-            <span>나의 서재</span>
+            <span>AI Atlas</span>
             <span className="slash">/</span>
-            <strong>{selected ? "학습 노트" : title}</strong>
+            <strong>{selected ? "자료 읽기" : title}</strong>
           </div>
           <div className="topbar-right">
-            <span className="private-badge">
-              <span />
-              개인 지식 공간
-            </span>
+            <button
+              className="primary-button"
+              onClick={() => {
+                setAddAdvanced(false);
+                session ? setDialog("add") : requireAuth();
+              }}
+            >
+              <Plus size={18} />
+              자료 추가
+            </button>
             {!session && (
               <button className="text-button" onClick={requireAuth}>
                 로그인 <ArrowUpRight size={15} />
@@ -733,7 +780,18 @@ export function Workspace() {
         </header>
         <main id="main" tabIndex={-1}>
           {session && config?.aiMode === "local" && (
-            <AutomationStatus api={api} onUpdated={automationUpdated} />
+            <AutomationStatus
+              api={api}
+              onUpdated={automationUpdated}
+              mode={
+                view === "settings" && !selected
+                  ? "settings"
+                  : view === "daily" && !selected
+                    ? "collection"
+                    : "compact"
+              }
+              onSettings={() => navigate("settings")}
+            />
           )}
           {error && (
             <div className="error-banner" role="alert">
@@ -758,6 +816,13 @@ export function Workspace() {
               }}
               onUpdate={update}
               onAnalyze={() => analyze()}
+              onSaveSource={async (text) => {
+                if (await update({ raw_text: text })) {
+                  await analyze(selected.id);
+                  return true;
+                }
+                return false;
+              }}
               busy={busy}
               onTrash={trash}
               onWiki={() => {
@@ -790,35 +855,26 @@ export function Workspace() {
             />
           ) : (
             <>
-              <div className={`page-heading ${view === "library" && category === "전체" ? "library-heading" : ""}`}>
+              <div
+                className={`page-heading ${view === "library" && category === "전체" ? "library-heading" : ""}`}
+              >
                 <div>
-                  <div className="eyebrow">
-                    YOUR PERSONAL LIBRARY
-                  </div>
                   <h1>
                     {title}
                     <span className="heading-dot">.</span>
                   </h1>
                   <p>
                     {view === "inbox"
-                      ? "아직 정리하지 않은 자료를 학습 노트로 바꿔보세요."
+                      ? "대기 중이거나 확인이 필요한 자료입니다. 자료를 열면 다음 행동을 안내합니다."
                       : view === "trash"
                         ? "삭제한 자료를 다시 자료함으로 가져올 수 있어요."
                         : view === "map"
                           ? "관심 분야를 따라 흩어진 지식을 연결해 보세요."
                           : view === "settings"
-                            ? "저장 공간과 AI 분석 연결 상태를 확인하세요."
-                            : "좋은 정보를 모으고, 깊이 이해하고, 내 것으로 만드세요."}
+                            ? "자동 정리, 계정과 내보내기를 관리합니다. 평소에는 바꿀 필요가 없습니다."
+                            : "자료를 추가하면 핵심 카드로 정리해요. 자세한 설명도 함께 보관합니다."}
                   </p>
                 </div>
-                {view !== "settings" && (
-                  <button
-                    className="primary-button"
-                    onClick={() => (session ? setDialog("add") : requireAuth())}
-                  >
-                    <Plus size={18} />새 자료 추가
-                  </button>
-                )}
               </div>
               {view === "settings" ? (
                 <div className="settings-grid">
@@ -828,121 +884,58 @@ export function Workspace() {
                   {session && (
                     <section className="setting-card full">
                       <h2>로그인 상태</h2>
-                      <p>이 브라우저에서는 로그인 상태가 자동으로 유지됩니다.</p>
-                      <button className="secondary-button" onClick={async () => {
-                        const result = await client?.auth.signOut();
-                        if (result?.error) { notify("로그아웃하지 못했습니다. 다시 시도해 주세요."); return; }
-                        setSession(null);
-                        notify("로그아웃했습니다.");
-                      }}><LogOut size={17} /> 로그아웃</button>
+                      <p>
+                        이 브라우저에서는 로그인 상태가 자동으로 유지됩니다.
+                      </p>
+                      <button
+                        className="secondary-button"
+                        onClick={async () => {
+                          const result = await client?.auth.signOut();
+                          if (result?.error) {
+                            notify(
+                              "로그아웃하지 못했습니다. 다시 시도해 주세요.",
+                            );
+                            return;
+                          }
+                          setSession(null);
+                          notify("로그아웃했습니다.");
+                        }}
+                      >
+                        <LogOut size={17} /> 로그아웃
+                      </button>
                     </section>
                   )}
-                  <section className="setting-card">
-                    <div className="setting-icon">
-                      <Layers />
-                    </div>
-                    <h2>나의 자료 저장소</h2>
-                    <p>Supabase에 원문과 학습 노트를 저장합니다.</p>
-                    <span
-                      className={`connection ${config?.database ? "connected" : ""}`}
-                    >
-                      {config?.database
-                        ? "데이터베이스 연결됨"
-                        : "데이터베이스 설정 대기"}
-                    </span>
-                    <p className="small-copy">
-                      로그인한 사용자의 자료만 조회하도록 접근 정책을
-                      적용합니다.
-                    </p>
-                  </section>
-                  <section className="setting-card">
-                    <div className="setting-icon">
-                      <Sparkles />
-                    </div>
-                    <h2>AI 학습 노트</h2>
-                    <p>본문을 분석해 설명, 개념도, 실습 자료를 만듭니다.</p>
-                    <span
-                      className={`connection ${config?.ai ? "connected" : ""}`}
-                    >
-                      {config?.aiMode === "local"
-                        ? "무료 로컬 AI · PC 연결 상태는 위에서 확인"
-                        : config?.ai
-                          ? "분석 API 설정됨"
-                          : "AI API 키 설정 필요"}
-                    </span>
-                    <p className="small-copy">
-                      {config?.ai
-                        ? `분석 모델: ${config.model}`
-                        : "서버의 OPENAI_API_KEY 환경변수를 등록하면 분석할 수 있습니다."}
-                      <br />
-                      계정당 하루 최대 {config?.dailyLimit || 20}회 분석합니다.
-                    </p>
-                  </section>
                   <section className="setting-card full">
-                    <h2>읽던 페이지에서 바로 담기</h2>
+                    <h2>내 지식 보관하기</h2>
                     <p>
-                      휴대폰에서 홈페이지를 홈 화면에 추가하면 빠르게 열 수
-                      있습니다. 지원되는 Android 브라우저에서는 공유 메뉴의 AI
-                      Atlas로 링크를 보낼 수 있습니다.
-                    </p>
-                    <p className="small-copy">
-                      PC에서는 아래 수집 버튼 코드를 북마크의 주소에 붙여
-                      넣으세요. 웹 페이지에서 그 북마크를 누르면
-                      주소·제목·선택한 문장이 입력됩니다. 저장 전 내용을 확인할
-                      수 있습니다.
+                      원문과 상세 분석은 자료에 함께 남습니다. 필요할 때 파일로
+                      가져갈 수 있어요.
                     </p>
                     <button
-                      className="button secondary"
-                      onClick={async () => {
-                        try {
-                          const target = window.location.origin;
-                          const code =
-                            "javascript:(()=>{const p=new URLSearchParams({capture_url:location.href,capture_title:document.title,capture_text:String(window.getSelection()||'').slice(0,3000)});window.open(" +
-                            JSON.stringify(target + "/?") +
-                            "+p,'_blank','noopener,noreferrer')})()";
-                          await navigator.clipboard.writeText(code);
-                          notify(
-                            "북마크 주소에 넣을 수집 코드를 복사했습니다.",
-                          );
-                        } catch {
-                          setError(
-                            "클립보드에 복사하지 못했습니다. 링크와 본문을 자료 추가에 붙여 넣어 주세요.",
-                          );
-                        }
-                      }}
+                      className="secondary-button"
+                      onClick={() => navigate("obsidian")}
                     >
-                      브라우저 수집 버튼 코드 복사
+                      <FolderSync size={18} />
+                      Obsidian 연결·파일 내보내기
                     </button>
                   </section>
-                  <section className="setting-card full">
-                    <h2>자료를 가져오는 방법</h2>
-                    <div className="support-grid">
-                      <div>
-                        <LinkIcon />
-                        <strong>웹 아티클</strong>
-                        <p>
-                          공개된 글의 본문을 가져옵니다. 로그인이 필요한
-                          페이지는 본문을 붙여넣어 주세요.
-                        </p>
-                      </div>
-                      <div>
-                        <Youtube />
-                        <strong>영상·소셜 게시물</strong>
-                        <p>
-                          링크와 함께 자막이나 게시물 본문을 넣어주세요. 접근
-                          제한으로 자동 수집되지 않을 수 있습니다.
-                        </p>
-                      </div>
-                      <div>
-                        <FileText />
-                        <strong>텍스트·메모</strong>
-                        <p>
-                          내용을 붙여넣거나 TXT, MD, SRT 파일을 추가하세요. 최대
-                          60,000자까지 저장합니다.
-                        </p>
-                      </div>
-                    </div>
-                  </section>
+                  <details className="setting-card full">
+                    <summary>사용 도움말</summary>
+                    <p>
+                      ① 자료 추가에서 링크나 텍스트를 넣으세요. ② 정리가 끝나면
+                      자료를 열어 카드를 읽으세요. ③ 더 궁금하면 상세 분석을
+                      선택하세요.
+                    </p>
+                    <p>
+                      로그인이 필요한 글이나 영상은 본문·자막이 필요할 수
+                      있습니다. 해당 자료의 ‘본문 추가’에서 이어서 정리할 수
+                      있습니다.
+                    </p>
+                    <p>
+                      직접 추가한 자료에는 앱의 일일 정리 한도가 없습니다. AI
+                      서비스 자체의 사용 제한과 처리 시간은 적용됩니다.
+                    </p>
+                  </details>
                 </div>
               ) : view === "map" ? (
                 <div className="knowledge-map">
@@ -983,17 +976,50 @@ export function Workspace() {
                 </div>
               ) : (
                 <>
-                  {view === "library" && category === "전체" && !query && source === "all" && page === 0 && !loading && (
-                    <ReadingDesk resources={active} demo={isDemo} onRead={openResource} onBrowse={() => {
-                      collection.current?.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
-                      searchInput.current?.focus({ preventScroll: true });
-                    }} />
+                  {view === "library" &&
+                    !query &&
+                    category === "전체" &&
+                    stateFilter === "all" &&
+                    page === 0 && (
+                      <div className="simple-guide" aria-label="사용 순서">
+                        <span>
+                          <b>1</b>링크·텍스트 추가
+                        </span>
+                        <ArrowRight size={16} aria-hidden="true" />
+                        <span>
+                          <b>2</b>자동으로 정리
+                        </span>
+                        <ArrowRight size={16} aria-hidden="true" />
+                        <span>
+                          <b>3</b>카드부터 읽기
+                        </span>
+                      </div>
+                    )}
+                  {isDemo && (
+                    <div className="demo-notice">
+                      지금은 예시 자료입니다. 로그인하면 내 자료를 추가할 수
+                      있어요.{" "}
+                      <button className="text-button" onClick={requireAuth}>
+                        로그인 <ArrowRight size={14} />
+                      </button>
+                    </div>
                   )}
-                  {view === "library" && (
-                    <nav className="topic-tabs" aria-label="서재 분야">
-                      {["전체", ...categories].map((topic) => <button key={topic} aria-pressed={category === topic} onClick={() => navigate("library", topic)}>{topic === "전체" ? "모든 발견" : topic}</button>)}
-                    </nav>
-                  )}
+                  <nav className="state-tabs" aria-label="자료 상태">
+                    {[
+                      ["all", "전체"],
+                      ["ready", "읽기 가능"],
+                      ["pending", "정리 전·진행 중"],
+                      ["attention", "확인 필요"],
+                    ].map(([id, label]) => (
+                      <button
+                        key={id}
+                        aria-pressed={stateFilter === id}
+                        onClick={() => setStateFilter(id)}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </nav>
                   <div className="filter-toolbar" ref={collection}>
                     <div className="search-box">
                       <Search size={19} />
@@ -1002,7 +1028,7 @@ export function Workspace() {
                         aria-label="자료 검색"
                         value={query}
                         onChange={(e) => setQuery(e.target.value)}
-                        placeholder="어떤 지식을 찾고 있나요?"
+                        placeholder="제목이나 내용으로 검색"
                       />
                       {!query && <kbd className="search-shortcut">Ctrl K</kbd>}
                       {query && (
@@ -1015,51 +1041,74 @@ export function Workspace() {
                         </button>
                       )}
                     </div>
-                    <div className="filter-controls">
-                      <label className="select-wrap">
-                        <span className="sr-only">출처 필터</span>
-                        <select
-                          value={source}
-                          onChange={(e) => setSource(e.target.value)}
-                        >
-                          <option value="all">모든 출처</option>
-                          {Object.entries(sourceNames).map(([v, n]) => (
-                            <option key={v} value={v}>
-                              {n}
-                            </option>
-                          ))}
-                        </select>
-                        <ChevronDown size={14} />
-                      </label>
-                      <label className="select-wrap">
-                        <span className="sr-only">정렬</span>
-                        <select
-                          value={sort}
-                          onChange={(e) => setSort(e.target.value)}
-                        >
-                          <option value="new">최근 저장순</option>
-                          <option value="old">오래된순</option>
-                          <option value="title">제목순</option>
-                        </select>
-                        <ChevronDown size={14} />
-                      </label>
-                      <div className="view-toggle">
-                        <button
-                          aria-label="카드 보기"
-                          aria-pressed={layout === "grid"}
-                          onClick={() => setLayout("grid")}
-                        >
-                          <Grid2X2 size={17} />
-                        </button>
-                        <button
-                          aria-label="목록 보기"
-                          aria-pressed={layout === "list"}
-                          onClick={() => setLayout("list")}
-                        >
-                          <List size={18} />
-                        </button>
+                    <details className="filter-disclosure">
+                      <summary>
+                        <Settings2 size={16} />
+                        필터·정렬
+                        {category !== "전체" || source !== "all"
+                          ? " · 적용 중"
+                          : ""}
+                      </summary>
+                      <div className="filter-controls">
+                        <label className="select-wrap">
+                          <span className="sr-only">분야 필터</span>
+                          <select
+                            aria-label="분야 필터"
+                            value={category}
+                            onChange={(e) => setCategory(e.target.value)}
+                          >
+                            {["전체", ...categories].map((c) => (
+                              <option key={c} value={c}>
+                                {c === "전체" ? "모든 분야" : c}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <label className="select-wrap">
+                          <span className="sr-only">출처 필터</span>
+                          <select
+                            value={source}
+                            onChange={(e) => setSource(e.target.value)}
+                          >
+                            <option value="all">모든 출처</option>
+                            {Object.entries(sourceNames).map(([v, n]) => (
+                              <option key={v} value={v}>
+                                {n}
+                              </option>
+                            ))}
+                          </select>
+                          <ChevronDown size={14} />
+                        </label>
+                        <label className="select-wrap">
+                          <span className="sr-only">정렬</span>
+                          <select
+                            value={sort}
+                            onChange={(e) => setSort(e.target.value)}
+                          >
+                            <option value="new">최근 저장순</option>
+                            <option value="old">오래된순</option>
+                            <option value="title">제목순</option>
+                          </select>
+                          <ChevronDown size={14} />
+                        </label>
+                        <div className="view-toggle">
+                          <button
+                            aria-label="카드 보기"
+                            aria-pressed={layout === "grid"}
+                            onClick={() => setLayout("grid")}
+                          >
+                            <Grid2X2 size={17} />
+                          </button>
+                          <button
+                            aria-label="목록 보기"
+                            aria-pressed={layout === "list"}
+                            onClick={() => setLayout("list")}
+                          >
+                            <List size={18} />
+                          </button>
+                        </div>
                       </div>
-                    </div>
+                    </details>
                   </div>
                   <div className="list-heading">
                     <div>
@@ -1090,57 +1139,83 @@ export function Workspace() {
                           ? "일치하는 자료가 없어요"
                           : view === "trash"
                             ? "휴지통이 비어 있어요"
-                            : "첫 번째 지식을 담아보세요"}
+                            : stateFilter !== "all" ||
+                                category !== "전체" ||
+                                source !== "all"
+                              ? "이 조건에 맞는 자료가 없어요"
+                              : "첫 자료를 추가해 보세요"}
                       </h2>
                       <p>
                         {query
                           ? "다른 검색어나 분야로 찾아보세요."
                           : "관심 있는 링크나 텍스트를 저장하면 여기에 차곡차곡 쌓입니다."}
                       </p>
-                      {!query && view !== "trash" && (
-                        <button
-                          className="primary-button"
-                          onClick={() =>
-                            session ? setDialog("add") : requireAuth()
-                          }
-                        >
-                          <Plus size={17} />
-                          자료 추가
-                        </button>
-                      )}
+                      {!query &&
+                        stateFilter === "all" &&
+                        category === "전체" &&
+                        source === "all" &&
+                        view !== "trash" && (
+                          <button
+                            className="primary-button"
+                            onClick={() =>
+                              session ? setDialog("add") : requireAuth()
+                            }
+                          >
+                            <Plus size={17} />
+                            자료 추가
+                          </button>
+                        )}
                     </div>
                   ) : (
                     <div
                       className={`resource-grid ${layout === "list" ? "list-layout" : ""}`}
                     >
                       {shown.map((r, i) => (
-                        <article className="resource-card" key={r.id} style={{ animationDelay: `${Math.min(i, 8) * 35}ms` }}>
+                        <article
+                          className="resource-card"
+                          key={r.id}
+                          style={{ animationDelay: `${Math.min(i, 8) * 35}ms` }}
+                        >
                           <button
                             className="card-main"
                             onClick={() =>
                               view === "trash" ? restore(r) : openResource(r)
                             }
                           >
-                            <Cover
-                              diagram={r.lesson?.diagram || r.visual}
-                              category={r.category}
-                              index={categories.indexOf(
-                                r.category as (typeof categories)[number],
-                              )}
-                            />
+                            {r.status === "ready" ? (
+                              <Cover
+                                diagram={r.lesson?.diagram || r.visual}
+                                category={r.category}
+                                index={categories.indexOf(
+                                  r.category as (typeof categories)[number],
+                                )}
+                              />
+                            ) : (
+                              <div
+                                className={`resource-placeholder ${["failed", "needs_content"].includes((r.progress || learningProgress(r)).phase) ? "attention" : ""}`}
+                              >
+                                <FileText size={28} />
+                                <span>
+                                  {(r.progress || learningProgress(r)).label}
+                                </span>
+                              </div>
+                            )}
                             <div className="card-body">
                               <div className="card-meta">
                                 <span className="source-name">
                                   <SourceIcon type={r.source_type} />
                                   {sourceNames[r.source_type]}
                                 </span>
-                                <span className={`status status-${r.status}`}>
+                                <span
+                                  className={`status status-${(r.progress || learningProgress(r)).phase}`}
+                                >
                                   {r.status === "ready" ? (
                                     <Sparkles size={11} />
-                                  ) : r.status === "analyzing" ? (
+                                  ) : (r.progress || learningProgress(r))
+                                      .phase === "running" ? (
                                     <LoaderCircle size={11} className="spin" />
                                   ) : null}
-                                  {statusNames[r.status]}
+                                  {(r.progress || learningProgress(r)).label}
                                 </span>
                               </div>
                               <h2>{r.title}</h2>
@@ -1149,7 +1224,7 @@ export function Workspace() {
                                   r.lesson?.takeaways[0] ||
                                     r.lesson?.summary ||
                                     r.summary ||
-                                    "원문 보관 중 · 분석 후 핵심 요약과 자료별 개념도가 표시됩니다.",
+                                    (r.progress || learningProgress(r)).message,
                                   130,
                                 )}
                               </p>
@@ -1179,10 +1254,10 @@ export function Workspace() {
                                       <Check size={14} />
                                       학습 완료
                                     </>
-                                  ) : r.lesson ? (
+                                  ) : r.status === "ready" ? (
                                     <>
                                       <Clock size={13} />
-                                      {r.lesson.readMinutes}분 읽기
+                                      카드 읽기
                                     </>
                                   ) : (
                                     <>
@@ -1261,15 +1336,51 @@ export function Workspace() {
               </span>
               <h2>내 자료실 로그인</h2>
               <p>아이디와 비밀번호로 내 자료실을 열어보세요.</p>
-                <form onSubmit={auth}>
-                  <label htmlFor="username">아이디</label>
-                  <input id="username" name="username" type="text" autoComplete="username" autoCapitalize="none" spellCheck={false} minLength={3} maxLength={30} required placeholder="아이디 입력" />
-                  <label htmlFor="password">비밀번호</label>
-                  <input id="password" name="password" type="password" autoComplete="current-password" minLength={8} required placeholder="8자 이상 입력" />
-                  {authMessage && <div className="notice" role="status">{authMessage}</div>}
-                  <button className="primary-button full-width" disabled={!client || authBusy}>{authBusy ? <LoaderCircle className="spin" size={18} /> : <LogIn size={18} />} 로그인</button>
-                </form>
-              <p className="small-copy">개인 전용 자료실입니다. 비밀번호 변경은 로그인한 계정의 연결 설정에서 할 수 있습니다.</p>
+              <form onSubmit={auth}>
+                <label htmlFor="username">아이디</label>
+                <input
+                  id="username"
+                  name="username"
+                  type="text"
+                  autoComplete="username"
+                  autoCapitalize="none"
+                  spellCheck={false}
+                  minLength={3}
+                  maxLength={30}
+                  required
+                  placeholder="아이디 입력"
+                />
+                <label htmlFor="password">비밀번호</label>
+                <input
+                  id="password"
+                  name="password"
+                  type="password"
+                  autoComplete="current-password"
+                  minLength={8}
+                  required
+                  placeholder="8자 이상 입력"
+                />
+                {authMessage && (
+                  <div className="notice" role="status">
+                    {authMessage}
+                  </div>
+                )}
+                <button
+                  className="primary-button full-width"
+                  disabled={!client || authBusy}
+                >
+                  {authBusy ? (
+                    <LoaderCircle className="spin" size={18} />
+                  ) : (
+                    <LogIn size={18} />
+                  )}{" "}
+                  로그인
+                </button>
+              </form>
+              <p className="small-copy">
+                개인 전용 자료실입니다. 비밀번호 변경은 로그인 후 설정에서 할 수
+                있습니다.
+              </p>
               {!config?.database && (
                 <p className="small-copy">
                   저장소 연결 작업이 완료되면 내 자료실을 이용할 수 있어요.
@@ -1281,8 +1392,8 @@ export function Workspace() {
               <span className="modal-symbol">
                 <Plus size={26} />
               </span>
-              <h2>새로운 발견을 담아보세요</h2>
-              <p>링크나 텍스트를 넣으면 나만의 학습 자료로 정리해요.</p>
+              <h2>자료 추가</h2>
+              <p>링크나 텍스트를 넣으면 카드와 상세 분석을 함께 만듭니다.</p>
               <div className="tabs" role="tablist" aria-label="입력 방식">
                 <button
                   type="button"
@@ -1320,66 +1431,86 @@ export function Workspace() {
                     </p>
                   </>
                 )}
-                <label htmlFor="new-title">
-                  제목 <span>선택</span>
-                </label>
-                <input
-                  id="new-title"
-                  maxLength={120}
-                  value={addTitle}
-                  onChange={(e) => setAddTitle(e.target.value)}
-                  placeholder="비워두면 AI가 내용을 보고 제목을 정해요"
-                />
-                <div className="input-label-row">
-                  <label htmlFor="new-text">
-                    {addType === "link" ? "본문 또는 영상 자막" : "정리할 내용"}{" "}
-                    {addType === "link" && <span>선택</span>}
+                <button
+                  className="text-button add-options-toggle"
+                  type="button"
+                  aria-expanded={addAdvanced}
+                  onClick={() => setAddAdvanced(!addAdvanced)}
+                >
+                  {addAdvanced
+                    ? "추가 옵션 접기"
+                    : "제목·본문 직접 입력 (선택)"}
+                  <ChevronDown size={15} />
+                </button>
+                <div hidden={!addAdvanced}>
+                  <label htmlFor="new-title">
+                    제목 <span>선택</span>
                   </label>
-                  <label className="file-upload">
-                    <Upload size={14} />
-                    텍스트 파일
-                    <input
-                      type="file"
-                      accept=".txt,.md,.srt,.vtt"
-                      onChange={async (e) => {
-                        const f = e.target.files?.[0];
-                        if (f) {
-                          if (f.size > 240000) {
-                            setError(
-                              "240KB 이하의 텍스트 파일을 사용해 주세요.",
-                            );
-                            return;
-                          }
-                          setAddText((await f.text()).slice(0, 60000));
-                        }
-                      }}
-                    />
-                  </label>
-                </div>
-                <textarea
-                  id="new-text"
-                  rows={7}
-                  required={addType === "text"}
-                  maxLength={60000}
-                  value={addText}
-                  onChange={(e) => setAddText(e.target.value)}
-                  placeholder="게시물 내용, 영상 자막, 메모를 붙여넣으세요. 소셜 링크는 본문을 함께 넣으면 더 정확하게 정리할 수 있어요."
-                />
-                <div className="field-hint right">
-                  {addText.length.toLocaleString()} / 60,000자
-                </div>
-                <label className="checkbox-label">
                   <input
-                    type="checkbox"
-                    checked={autoAnalyze}
-                    onChange={(e) => setAutoAnalyze(e.target.checked)}
+                    id="new-title"
+                    maxLength={120}
+                    value={addTitle}
+                    onChange={(e) => setAddTitle(e.target.value)}
+                    placeholder="비워두면 AI가 내용을 보고 제목을 정해요"
                   />
-                  저장 후 AI 학습 노트 만들기
-                </label>
+                </div>
+                <div hidden={addType === "link" && !addAdvanced}>
+                  <div className="input-label-row">
+                    <label htmlFor="new-text">
+                      {addType === "link"
+                        ? "본문 또는 영상 자막"
+                        : "정리할 내용"}{" "}
+                      {addType === "link" && <span>선택</span>}
+                    </label>
+                    <label className="file-upload">
+                      <Upload size={14} />
+                      텍스트 파일
+                      <input
+                        type="file"
+                        accept=".txt,.md,.srt,.vtt"
+                        onChange={async (e) => {
+                          const f = e.target.files?.[0];
+                          if (f) {
+                            if (f.size > 240000) {
+                              setError(
+                                "240KB 이하의 텍스트 파일을 사용해 주세요.",
+                              );
+                              return;
+                            }
+                            setAddText((await f.text()).slice(0, 60000));
+                          }
+                        }}
+                      />
+                    </label>
+                  </div>
+                  <textarea
+                    id="new-text"
+                    rows={7}
+                    required={addType === "text"}
+                    minLength={addType === "text" ? 80 : undefined}
+                    maxLength={60000}
+                    value={addText}
+                    onChange={(e) => setAddText(e.target.value)}
+                    placeholder="정리할 글이나 자막을 80자 이상 붙여 넣으세요."
+                  />
+                  <div className="field-hint right">
+                    {addText.length.toLocaleString()} / 60,000자
+                  </div>
+                </div>
+                <div hidden={!addAdvanced}>
+                  <label className="checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={autoAnalyze}
+                      onChange={(e) => setAutoAnalyze(e.target.checked)}
+                    />
+                    저장 후 자동으로 정리하기
+                  </label>
+                </div>
                 {!config?.ai && (
                   <div className="notice">
-                    자료는 먼저 저장할 수 있어요. AI 분석은 API 연결 후 사용할
-                    수 있습니다.
+                    자료는 먼저 저장할 수 있어요. 자동 정리는 연결 설정을 마친
+                    뒤 사용할 수 있습니다.
                   </div>
                 )}
                 {error && (
@@ -1393,7 +1524,11 @@ export function Workspace() {
                   ) : (
                     <Sparkles size={18} />
                   )}{" "}
-                  {adding ? "자료를 담고 있어요…" : "내 자료함에 저장"}
+                  {adding
+                    ? "저장하고 있어요…"
+                    : autoAnalyze
+                      ? "추가하고 정리하기"
+                      : "원문만 저장"}
                 </button>
               </form>
             </>
@@ -1404,8 +1539,8 @@ export function Workspace() {
         <div className="analysis-indicator" role="status">
           <LoaderCircle className="spin" size={18} />
           <div>
-            <strong>학습 노트를 만들고 있어요</strong>
-            <span>개념 정리 → 시각화 → 실습 구성</span>
+            <strong>정리 요청을 보내고 있어요</strong>
+            <span>현재 진행 상태는 자료 화면에서 확인할 수 있어요.</span>
           </div>
         </div>
       )}

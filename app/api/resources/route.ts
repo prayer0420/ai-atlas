@@ -7,7 +7,12 @@ import {
   checkDb,
   errorResponse,
   AppError,
+  ensureAIAllowed,
 } from "@/lib/server";
+import { enqueue, queueLocally } from "@/lib/automation";
+import { withProgress } from "@/lib/resource-progress";
+import { STALE_ANALYSIS_MS } from "@/lib/learning-progress";
+import type { Resource } from "@/lib/types";
 import { sourceType, validateUrl } from "@/lib/extract";
 import { readableValue } from "@/lib/content-text";
 export const dynamic = "force-dynamic";
@@ -19,7 +24,7 @@ export async function GET(req: NextRequest) {
     let q = db
       .from("ai_atlas_resources")
       .select(
-        "id,title,source_url,source_type,category,tags,status,favorite,learned,created_at,updated_at,deleted_at,error_message,summary:lesson->>summary,visual:lesson->diagram",
+        "id,title,source_url,source_type,category,tags,status,favorite,learned,created_at,updated_at,analysis_started_at,deleted_at,error_message,summary:lesson->>summary,visual:lesson->diagram",
         { count: "exact" },
       )
       .eq("user_id", user.id);
@@ -31,6 +36,17 @@ export async function GET(req: NextRequest) {
     if (view === "favorites") q = q.eq("favorite", true);
     if (view === "learned") q = q.eq("learned", true);
     if (view === "inbox") q = q.neq("status", "ready");
+    const state = p.get("state");
+    const cutoff = new Date(Date.now() - STALE_ANALYSIS_MS).toISOString();
+    if (state === "ready") q = q.eq("status", "ready");
+    if (state === "pending")
+      q = q.or(
+        `status.eq.saved,and(status.eq.analyzing,analysis_started_at.gte.${cutoff})`,
+      );
+    if (state === "attention")
+      q = q.or(
+        `status.in.(failed,needs_content),and(status.eq.analyzing,analysis_started_at.lt.${cutoff})`,
+      );
     const category = p.get("category");
     if (category && category !== "전체") q = q.eq("category", category);
     const source = p.get("source");
@@ -57,7 +73,16 @@ export async function GET(req: NextRequest) {
     const { data, error, count } = await q;
     checkDb(error);
     return NextResponse.json(
-      { resources: readableValue(data), total: count },
+      {
+        resources: readableValue(
+          await withProgress(
+            db,
+            user.id,
+            (data || []) as unknown as Resource[],
+          ),
+        ),
+        total: count,
+      },
       { headers: { "Cache-Control": "no-store" } },
     );
   } catch (e) {
@@ -68,6 +93,7 @@ const input = z.object({
   title: z.string().trim().max(120).default(""),
   url: z.string().trim().max(2048).default(""),
   text: z.string().trim().max(60000).default(""),
+  analyze: z.boolean().default(true),
 });
 export async function POST(req: NextRequest) {
   try {
@@ -89,8 +115,10 @@ export async function POST(req: NextRequest) {
       .is("deleted_at", null)
       .maybeSingle();
     checkDb(existingError);
-    if (existing)
-      return NextResponse.json({ resource: existing, duplicate: true });
+    if (existing) {
+      const [resource] = await withProgress(db, user.id, [existing]);
+      return NextResponse.json({ resource, duplicate: true });
+    }
     const { data: resource, error } = await db
       .from("ai_atlas_resources")
       .insert({
@@ -113,6 +141,43 @@ export async function POST(req: NextRequest) {
         409,
       );
     checkDb(error);
+    // Persist first; a queue error must never lose the source or imply success.
+    // Scheduling here removes the browser-close gap between save and analysis.
+    if (data.analyze && queueLocally()) {
+      try {
+        ensureAIAllowed(user.email);
+        const queued = await enqueue(
+          user.id,
+          "analyze",
+          { resourceId: resource.id, manual: true },
+          resource.id,
+        );
+        return NextResponse.json(
+          {
+            resource: {
+              ...resource,
+              progress: {
+                phase: "queued",
+                label: "정리 대기",
+                message: queued.message,
+                action: null,
+              },
+            },
+            ...queued,
+          },
+          { status: 201 },
+        );
+      } catch {
+        return NextResponse.json(
+          {
+            resource,
+            queueError:
+              "자료는 저장했지만 정리를 예약하지 못했습니다. 자료 화면의 ‘정리 시작’을 눌러 다시 시도해 주세요.",
+          },
+          { status: 201 },
+        );
+      }
+    }
     return NextResponse.json({ resource }, { status: 201 });
   } catch (e) {
     return errorResponse(e);

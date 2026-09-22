@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AtSign, Camera as Instagram, CheckCircle2, Laptop, LoaderCircle, Play, RefreshCw } from "lucide-react";
+import { LoaderCircle, Play } from "lucide-react";
 type CaptureChannel = "all" | "instagram" | "threads" | "youtube";
 type Job = {
   id: string;
@@ -18,7 +18,11 @@ type Job = {
     unchanged?: number;
     reason?: string;
     checked_at?: string;
-    items?: { title: string; url: string; metrics?: { views?: number; likes?: number } }[];
+    items?: {
+      title: string;
+      url: string;
+      metrics?: { views?: number; likes?: number };
+    }[];
     failures?: { platform?: string; stage?: string }[];
   } | null;
 };
@@ -38,9 +42,9 @@ type State = {
 };
 const names: Record<string, string> = {
   analyze: "학습 노트",
-  daily: "오늘의 카드뉴스",
-  wiki: "지식 위키",
-  question: "위키 질문",
+  daily: "새 소식",
+  wiki: "지식 노트",
+  question: "자료에 질문",
 };
 const statuses: Record<string, string> = {
   queued: "대기",
@@ -51,13 +55,18 @@ const statuses: Record<string, string> = {
 export function AutomationStatus({
   api,
   onUpdated,
+  mode = "compact",
+  onSettings,
 }: {
   api: (p: string, o?: RequestInit) => Promise<any>;
   onUpdated: () => void;
+  mode?: "compact" | "settings" | "collection";
+  onSettings: () => void;
 }) {
   const [data, setData] = useState<State | null>(null),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false);
+  const [channel, setChannel] = useState<CaptureChannel>("all");
   const pending = useRef(0);
   const completed = useRef<string | null>(null);
   const load = useCallback(async () => {
@@ -154,171 +163,276 @@ export function AutomationStatus({
   }
   const collectionJobs =
     data?.jobs.filter((job) => job.payload?.action === "manual-collect") || [];
-  const activeCollection = collectionJobs.find((job) => ["queued", "running"].includes(job.status));
-  const latestCollection = collectionJobs.find((job) => job.status === "completed" || job.status === "failed");
-  const channelNames: Record<CaptureChannel, string> = { all: "전체", instagram: "Instagram", threads: "Threads", youtube: "YouTube" };
-  return (
-    <details className="automation-status">
-      <summary>
-        <Laptop size={18} />
-        <strong aria-live="polite">
-          {!data
-            ? "자동화 상태 확인 중"
-            : data.paused
-              ? "자동 정리 일시 중지"
-              : data.online
-                ? data.worker?.busy
-                  ? data.provider === "hermes"
-                    ? "연결한 AI가 정리하고 있어요"
-                    : "무료 AI가 정리하고 있어요"
-                  : data.provider === "hermes"
-                    ? "Hermes AI 연결됨"
-                    : "무료 AI 연결됨"
-                : "PC 연결 대기"}
-        </strong>
-        <span>
-          {data?.pending
-            ? `${data.pending}개 작업 대기·처리 중`
-            : "수집부터 보관까지 자동으로"}
-        </span>
-      </summary>
-      <div className="automation-details">
-        <p>
-          매일 오전 9시대에 공개 자료를 수집합니다. AI 분석과 Obsidian 저장은
-          연결된 PC가 켜져 있고 로그인되어 있을 때 이어서 처리합니다. 브라우저를
-          닫아도 요청은 보관됩니다.
-        </p>
-        <div className="automation-facts">
-          <span>{data?.provider === "hermes" ? "Hermes 연결 프로바이더" : "무료 Ollama"} · {data?.worker?.model || "연결 확인 중"}</span>
-          <span>한 번에 한 작업 · 오류 시 최대 3회 시도</span>
-          <span>
-            {data?.worker?.vault_synced_at
-              ? `Obsidian 저장: ${new Date(data.worker.vault_synced_at).toLocaleString("ko-KR")}`
-              : "Obsidian 자동 저장 대기"}
-          </span>
+  const activeCollection = collectionJobs.find((job) =>
+    ["queued", "running"].includes(job.status),
+  );
+  const latestCollection = collectionJobs.find(
+    (job) => job.status === "completed" || job.status === "failed",
+  );
+  const channelNames: Record<CaptureChannel, string> = {
+    all: "전체",
+    instagram: "Instagram",
+    threads: "Threads",
+    youtube: "YouTube",
+  };
+  const title = error
+    ? "처리 상태를 확인하지 못했어요"
+    : !data
+      ? "처리 상태 확인 중"
+      : data.paused
+        ? "자동 정리가 멈춰 있어요"
+        : !data.online
+          ? "처리할 PC가 연결되지 않았어요"
+          : data.worker?.busy
+            ? "자료를 정리하고 있어요"
+            : data.pending && data.worker?.last_error
+              ? "일부 작업을 다시 시도할 예정이에요"
+              : "자료를 추가하면 자동으로 정리해요";
+  const hint = !data
+    ? ""
+    : data.paused
+      ? "새 요청은 보관되며, 설정에서 이어서 처리할 수 있습니다."
+      : !data.online
+        ? "자료는 안전하게 저장됩니다. 연결된 PC의 작업기가 실행되면 이어서 처리합니다."
+        : data.pending
+          ? data.pending +
+            "개 작업 대기·처리 중" +
+            (data.worker?.last_error && !data.worker.busy
+              ? " · 원문은 보관되어 있습니다. 설정에서 오류를 확인할 수 있어요."
+              : "")
+          : "완성된 자료는 ‘내 자료’에서 읽을 수 있습니다.";
+  if (mode === "compact")
+    return (
+      <section
+        className={
+          "processing-strip " +
+          (error || data?.paused || (data && !data.online)
+            ? "needs-attention"
+            : "")
+        }
+        aria-label="자동 정리 상태"
+      >
+        <span className="processing-dot" />
+        <div>
+          <strong>{title}</strong>
+          <p>{hint}</p>
         </div>
-        <section className="manual-collection" aria-labelledby="ai-provider-title">
-          <div>
-            <strong id="ai-provider-title">학습 AI 선택</strong>
-            <p>새 작업부터 적용됩니다. Hermes는 PC에 이미 연결한 ChatGPT/Codex 프로바이더를 사용하며 인증정보는 홈페이지로 전송하지 않습니다.</p>
-          </div>
-          <div className="collection-actions" role="group" aria-label="학습 AI 선택">
-            <button className={data?.provider === "ollama" ? "button primary" : "button secondary"} disabled={busy || !data} onClick={() => selectProvider("ollama")}>
-              {data?.provider === "ollama" && <CheckCircle2 size={16} />} Ollama
-            </button>
-            <button className={data?.provider === "hermes" ? "button primary" : "button secondary"} disabled={busy || !data} onClick={() => selectProvider("hermes")}>
-              {data?.provider === "hermes" && <CheckCircle2 size={16} />} 연결한 프로바이더
-            </button>
-          </div>
-          <small>{data?.provider === "hermes" ? "현재: Hermes의 openai-codex / gpt-6-astra 연결을 사용합니다." : "현재: PC의 Ollama 모델을 사용합니다."}</small>
-        </section>
-        <section className="manual-collection" aria-labelledby="manual-collection-title">
-          <div>
-            <strong id="manual-collection-title">지금 새 자료 가져오기</strong>
-            <p>Instagram 새 DM 링크, Threads 새 리포스트, YouTube AI 자료를 확인합니다. 결과는 이곳에 바로 표시되고 새 자료는 학습함에 추가됩니다.</p>
-          </div>
+        <button className="text-button" onClick={onSettings}>
+          설정
+        </button>
+      </section>
+    );
+  return (
+    <section
+      className="automation-panel"
+      aria-label={mode === "settings" ? "자동 정리 설정" : "소셜 자료 가져오기"}
+    >
+      <div className="automation-panel-heading">
+        <div>
+          <h2>{mode === "settings" ? "자동 정리" : "새 자료 가져오기"}</h2>
+          <p>
+            {mode === "settings"
+              ? title
+              : "연결한 Instagram DM·Threads 리포스트·YouTube에서 새 자료를 가져옵니다."}
+          </p>
+        </div>
+      </div>
+      {mode === "collection" ? (
+        <>
           <div className="collection-actions">
-            <button className="button primary" disabled={busy || !!activeCollection || !data?.online} onClick={() => collect("all")}>
-              {activeCollection?.payload?.channel === "all" ? <LoaderCircle className="spin" size={16} /> : <Play size={16} />}
-              전체 수집
-            </button>
-            <button className="button secondary" disabled={busy || !!activeCollection || !data?.online} onClick={() => collect("instagram")}>
-              <Instagram size={16} /> Instagram DM
-            </button>
-            <button className="button secondary" disabled={busy || !!activeCollection || !data?.online} onClick={() => collect("youtube")}>
-              <Play size={16} /> YouTube
-            </button>
-            <button className="button secondary" disabled={busy || !!activeCollection || !data?.online} onClick={() => collect("threads")}>
-              <AtSign size={16} /> Threads 리포스트
+            <label htmlFor="capture-channel">가져올 곳</label>
+            <select
+              id="capture-channel"
+              value={channel}
+              onChange={(e) => setChannel(e.target.value as CaptureChannel)}
+              disabled={busy || !!activeCollection}
+            >
+              <option value="all">연결한 곳 모두</option>
+              <option value="instagram">Instagram 새 DM 링크</option>
+              <option value="threads">Threads 리포스트</option>
+              <option value="youtube">YouTube AI 자료</option>
+            </select>
+            <button
+              className="primary-button"
+              disabled={busy || !!activeCollection || !data || data.paused}
+              onClick={() => collect(channel)}
+            >
+              {busy || activeCollection ? (
+                <LoaderCircle className="spin" size={16} />
+              ) : (
+                <Play size={16} />
+              )}
+              {activeCollection
+                ? activeCollection.status === "queued"
+                  ? "가져오기 대기"
+                  : "가져오는 중"
+                : busy
+                  ? "요청 중"
+                  : "가져오기"}
             </button>
           </div>
+          {data && (!data.online || data.paused) && (
+            <p className="field-hint">{hint}</p>
+          )}
           {activeCollection && (
-            <p className="collection-progress" aria-live="polite">
-              <LoaderCircle className="spin" size={15} /> {channelNames[activeCollection.payload?.channel || "all"]} 자료를 {activeCollection.status === "queued" ? "수집 대기 중입니다." : "가져오고 있습니다."}
+            <p role="status">
+              {channelNames[activeCollection.payload?.channel || "all"]} ·{" "}
+              {activeCollection.status === "queued"
+                ? "수집 요청을 저장했습니다. PC에서 순서대로 처리합니다."
+                : "새 자료를 확인하고 있습니다."}
             </p>
           )}
           {latestCollection && !activeCollection && (
-            <div className="collection-result" aria-live="polite">
+            <div className="collection-result" role="status">
               <strong>
                 {latestCollection.status === "failed"
-                  ? "수집을 완료하지 못했습니다"
-                  : `${channelNames[latestCollection.payload?.channel || "all"]} · 수집 ${latestCollection.result?.saved || 0}건 · 학습함 새 추가 ${latestCollection.result?.imported || 0}건`}
+                  ? "자료를 가져오지 못했습니다"
+                  : "내 자료에 " +
+                    (latestCollection.result?.imported || 0) +
+                    "건 추가했어요"}
               </strong>
-              {latestCollection.error && <p>{latestCollection.error}</p>}
-              {latestCollection.result?.reason && <p>{latestCollection.result.reason}</p>}
-              {!!latestCollection.result?.unchanged && (
-                <small>이미 확인한 항목 {latestCollection.result.unchanged}건은 다시 저장하지 않았습니다.</small>
+              <p>
+                {latestCollection.error ||
+                  latestCollection.result?.reason ||
+                  "이미 저장한 링크는 건너뜁니다. 새 자료는 자동 정리 후 읽을 수 있습니다."}
+              </p>
+              {!!latestCollection.result?.failures?.length && (
+                <p>
+                  읽지 못한 후보 {latestCollection.result.failures.length}건이
+                  있습니다.
+                </p>
               )}
               {!!latestCollection.result?.items?.length && (
-                <ul>
-                  {latestCollection.result.items.map((item) => (
-                    <li key={item.url}>
-                      <a href={item.url} target="_blank" rel="noreferrer">{item.title}</a>
-                      {(item.metrics?.views || item.metrics?.likes) && (
-                        <small>{item.metrics.views ? `조회 ${item.metrics.views.toLocaleString("ko-KR")}` : `좋아요 ${item.metrics.likes?.toLocaleString("ko-KR")}`}</small>
-                      )}
-                    </li>
-                  ))}
-                </ul>
+                <details>
+                  <summary>가져온 링크 확인</summary>
+                  <ul>
+                    {latestCollection.result.items.map((item) => (
+                      <li key={item.url}>
+                        <a href={item.url} target="_blank" rel="noreferrer">
+                          {item.title}
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                </details>
               )}
-              {!!latestCollection.result?.failures?.length && (
-                <small>읽지 못한 후보 {latestCollection.result.failures.length}건은 저장하지 않았습니다.</small>
+              {latestCollection.finished_at && (
+                <small>
+                  {new Date(latestCollection.finished_at).toLocaleString(
+                    "ko-KR",
+                  )}
+                </small>
               )}
-              {latestCollection.finished_at && <small>확인: {new Date(latestCollection.finished_at).toLocaleString("ko-KR")}</small>}
             </div>
           )}
-        </section>
-        {!!data?.worker?.vault_conflicts && (
-          <p>
-            직접 수정한 파일 {data.worker.vault_conflicts}개를 보존했습니다.
-            최신 내용은 홈페이지에서 확인할 수 있습니다.
-          </p>
-        )}
-        {error && <p role="alert">{error}</p>}
-        {!data?.online && (
-          <p>
-            PC가 꺼져 있거나 AI가 준비 중입니다. PC에서 AI Atlas 자동화를
-            실행하면 대기 작업을 이어서 처리합니다.
-          </p>
-        )}
-        <ul>
-          {data?.jobs.filter((job) => job.payload?.action !== "manual-collect").map((j) => (
-            <li key={j.id}>
-              <span>
-                {j.status === "completed" ? (
-                  <CheckCircle2 size={16} />
-                ) : j.status === "running" ? (
-                  <LoaderCircle size={16} />
-                ) : null}
-                <strong>{names[j.kind]}</strong> · {statuses[j.status]}
-                {j.error && <small>{j.error}</small>}
-              </span>
-              {j.status === "failed" && (
-                <button
-                  className="button secondary"
-                  disabled={busy}
-                  onClick={() => retry(j.id)}
-                >
-                  <RefreshCw size={14} />
-                  다시 시도
-                </button>
-              )}
-            </li>
-          ))}
-        </ul>
-        <button className="text-button" onClick={load}>
-          상태 새로고침
-        </button>
-        <button className="button secondary" disabled={busy} onClick={toggle}>
-          {data?.paused ? "자동 정리 이어하기" : "자동 정리 잠시 멈춤"}
-        </button>
-        {data?.paused && (
-          <p>
-            자동 정리가 일시 중지됐습니다. 진행 중인 작업은 마친 뒤 멈추며, 새
-            요청은 보관됩니다.
-          </p>
-        )}
-      </div>
-    </details>
+        </>
+      ) : (
+        <>
+          <p>{hint} 브라우저를 닫아도 저장된 요청은 유지됩니다.</p>
+          <button
+            className="secondary-button"
+            disabled={busy || !data}
+            onClick={toggle}
+          >
+            {data?.paused ? "자동 정리 이어하기" : "자동 정리 잠시 멈추기"}
+          </button>
+          <details className="advanced-settings">
+            <summary>AI와 저장 연결</summary>
+            <p>
+              다음에 시작하는 작업부터 적용됩니다. 연결 정보는 PC에서
+              관리합니다.
+            </p>
+            <div
+              className="collection-actions"
+              role="group"
+              aria-label="분석에 사용할 AI"
+            >
+              <button
+                className={
+                  data?.provider === "hermes"
+                    ? "primary-button"
+                    : "secondary-button"
+                }
+                aria-pressed={data?.provider === "hermes"}
+                disabled={busy || !data}
+                onClick={() => selectProvider("hermes")}
+              >
+                연결한 AI
+              </button>
+              <button
+                className={
+                  data?.provider === "ollama"
+                    ? "primary-button"
+                    : "secondary-button"
+                }
+                aria-pressed={data?.provider === "ollama"}
+                disabled={busy || !data}
+                onClick={() => selectProvider("ollama")}
+              >
+                PC의 로컬 AI
+              </button>
+            </div>
+            <p className="field-hint">
+              작업기가 마지막으로 보고한 모델:{" "}
+              {data?.worker?.model || "아직 확인되지 않음"}
+            </p>
+            <p className="field-hint">
+              {data?.worker?.vault_synced_at
+                ? "Obsidian 마지막 저장: " +
+                  new Date(data.worker.vault_synced_at).toLocaleString("ko-KR")
+                : "Obsidian 저장 기록이 아직 없습니다."}
+            </p>
+            {!!data?.worker?.vault_conflicts && (
+              <p>
+                직접 수정한 파일 {data.worker.vault_conflicts}개는 덮어쓰지 않고
+                보존했습니다.
+              </p>
+            )}
+          </details>
+          <details className="advanced-settings">
+            <summary>최근 작업·오류 확인</summary>
+            <p>
+              최근 12개 작업입니다. 자료별 상태와 복구는 ‘내 자료 → 확인
+              필요’에서 확인하세요.
+            </p>
+            <ul className="job-list">
+              {data?.jobs.map((j) => (
+                <li key={j.id}>
+                  <div>
+                    <strong>
+                      {j.payload?.action === "manual-collect"
+                        ? "자료 가져오기"
+                        : names[j.kind] || "자료 정리"}
+                    </strong>{" "}
+                    · {statuses[j.status]}
+                    {j.error && <p>{j.error}</p>}
+                  </div>
+                  {j.status === "failed" && (
+                    <button
+                      className="secondary-button"
+                      disabled={busy}
+                      onClick={() => retry(j.id)}
+                    >
+                      다시 시도
+                    </button>
+                  )}
+                </li>
+              ))}
+            </ul>
+            <button className="text-button" onClick={load}>
+              상태 새로고침
+            </button>
+          </details>
+        </>
+      )}
+      {error && (
+        <p role="alert">
+          {error}{" "}
+          <button className="text-button" onClick={load}>
+            다시 확인
+          </button>
+        </p>
+      )}
+    </section>
   );
 }

@@ -25,7 +25,9 @@ export const providerReady = async () => {
       signal: AbortSignal.timeout(4000),
     });
     const data = await result.json();
-    return Boolean(data.models?.some((m: { name: string }) => m.name === localModel()));
+    return Boolean(
+      data.models?.some((m: { name: string }) => m.name === localModel()),
+    );
   } catch {
     return false;
   }
@@ -36,7 +38,8 @@ export function parseHermesJson(output: string) {
   const candidate = (fenced || clean).trim();
   const start = candidate.indexOf("{");
   const end = candidate.lastIndexOf("}");
-  if (start < 0 || end < start) throw new Error("Hermes returned no JSON object");
+  if (start < 0 || end < start)
+    throw new Error("Hermes returned no JSON object");
   return JSON.parse(candidate.slice(start, end + 1));
 }
 async function hermesStructured<T extends z.ZodType>(
@@ -50,27 +53,33 @@ async function hermesStructured<T extends z.ZodType>(
     // of process arguments and execFile error messages.
     const stdout = await new Promise<string>((resolve, reject) => {
       const child = execFile(
-      hermesExecutable(),
-      [
-        "--safe-mode",
-        "chat",
-        // Hermes resolves this explicit empty toolset to zero tools. Never use
-        // its default CLI toolset while processing untrusted collected prose.
-        "--toolsets", "none",
-        "--provider",
-        "openai-codex",
-        "--model",
-        "gpt-6-astra",
-        "--reasoning",
-        "medium",
-        "--oneshot", "--quiet", "--query-file", "-",
-      ],
-      {
-        timeout: 20 * 60_000,
-        maxBuffer: 8 * 1024 * 1024,
-        windowsHide: true,
-        env: providerEnvironment(process.env),
-      }, (error, stdout) => error ? reject(error) : resolve(stdout));
+        hermesExecutable(),
+        [
+          "--safe-mode",
+          "chat",
+          // Hermes resolves this explicit empty toolset to zero tools. Never use
+          // its default CLI toolset while processing untrusted collected prose.
+          "--toolsets",
+          "none",
+          "--provider",
+          "openai-codex",
+          "--model",
+          "gpt-6-astra",
+          "--reasoning",
+          "medium",
+          "--oneshot",
+          "--quiet",
+          "--query-file",
+          "-",
+        ],
+        {
+          timeout: 20 * 60_000,
+          maxBuffer: 8 * 1024 * 1024,
+          windowsHide: true,
+          env: providerEnvironment(process.env),
+        },
+        (error, stdout) => (error ? reject(error) : resolve(stdout)),
+      );
       child.stdin?.on("error", () => {});
       child.stdin?.end(prompt, "utf8");
     });
@@ -87,7 +96,7 @@ async function hermesStructured<T extends z.ZodType>(
       code: (error as NodeJS.ErrnoException)?.code,
     });
     throw new AppError(
-      "Hermes 연결 프로바이더가 응답하지 않았습니다. Hermes의 ChatGPT/Codex 로그인을 확인해 주세요.",
+      "AI 서비스 연결 또는 응답 처리에 실패했습니다. 원문은 저장되어 있습니다. 잠시 후 다시 시도하고, 계속되면 설정에서 AI 연결 상태를 확인해 주세요.",
       503,
     );
   }
