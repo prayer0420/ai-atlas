@@ -93,6 +93,18 @@ export const storyboardSchema = z.object({
   caption: z.string().trim().min(40).max(3000),
   caveats: z.array(z.string().trim().min(1).max(250)).max(8),
 });
+/** Match layout requirements during local decoding, without inventing items. */
+export function localStoryboardSchema(evidenceQuotes: [string, ...string[]], count: number) {
+  const card = storyCardSchema.extend({ evidence: z.enum(evidenceQuotes) });
+  const items = storyCardSchema.shape.items;
+  return storyboardSchema.extend({
+    cards: z.array(z.discriminatedUnion("layout", [
+      card.extend({ layout: z.enum(["scene", "stack", "conversation", "statement", "closing"]) }),
+      card.extend({ layout: z.enum(["relation", "steps"]), items: items.min(2) }),
+      card.extend({ layout: z.literal("comparison"), items: items.length(2) }),
+    ])).length(count),
+  });
+}
 export type Storyboard = z.infer<typeof storyboardSchema>;
 export type StoryCard = z.infer<typeof storyCardSchema>;
 export type CardAsset = {
@@ -172,6 +184,18 @@ export class CardWorkflowError extends Error {
     super(message);
   }
 }
+/** Visible notes are source conditions, not instructions to the illustrator. */
+export function cardPresentationIssues(card: StoryCard, source: string): string[] {
+  const issues: string[] = [];
+  if ([...storyCardSchema.shape.layout.options, "caveats", "intro", "outro"].includes(card.role.toLowerCase()))
+    issues.push("독자용 역할에 내부 구도 코드가 노출됐습니다. 장의 역할을 짧은 한국어로 작성하세요.");
+  const condition = card.condition.replace(/\s+/g, " ").trim();
+  const quotedFromSource = condition && source.replace(/\s+/g, " ").includes(condition);
+  const artDirection = /#[\da-f]{6}\b|(?:화면|배경|박스|아이콘|메모|텍스트|문구|흐름도|타이포그래피).*(?:배치(?:합니다|하세요|하여|하고)|채우고|시각화하여)|(?:디자인|스타일)(?:을|로).*(?:사용합니다|배치합니다)/i;
+  if (condition && !quotedFromSource && artDirection.test(condition))
+    issues.push("독자용 조건에 제작 지시가 섞였습니다. 원문의 적용 조건·한계만 남기고 별도 조건이 없으면 빈 문자열로 작성하세요. 디자인 설명은 composition에만 둡니다.");
+  return issues;
+}
 export function validateStoryboard(
   story: Storyboard,
   brief: CardBrief,
@@ -184,6 +208,7 @@ export function validateStoryboard(
   const copies = new Set<string>();
   story.cards.forEach((c, i) => {
     const n = i + 1;
+    issues.push(...cardPresentationIssues(c, source).map(issue => `${n}장: ${issue}`));
     if (!normalize(source).includes(normalize(c.evidence)))
       issues.push(`${n}장: 원문에 없는 근거 인용입니다.`);
     const compact = c.copy.replace(/\s|[.,!?。]/g, "");
@@ -215,6 +240,15 @@ export function validateStoryboard(
       !/직접 써|써보니|사용해 보니|제가 써|내가 써/.test(source)
     )
       issues.push(`${n}장: 제공되지 않은 사용 경험을 만들지 마세요.`);
+    // An observed working environment does not establish an exclusive requirement.
+    const visible = [c.title, c.copy, c.condition, ...c.items.map(item => `${item.label} ${item.detail}`)].join(" ");
+    const exclusiveEnvironment = /(?:PC|컴퓨터|기기|환경|브라우저|서버|운영체제)(?:에서|에|으로|로)만.{0,40}(?:작동|동작|실행|사용)/i;
+    const explicitRestriction = /(?:에서만|에만|으로만|로만)[^.!?\n]{0,35}(?:작동|동작|실행|사용|지원)\s*(?:합니다|됩니다|한다|된다|할 수|가능)|한정|제한|전용|오직|외에는/;
+    if (exclusiveEnvironment.test(visible) && !explicitRestriction.test(source))
+      issues.push(`${n}장: 동작을 확인한 환경을 배타적 실행 제약으로 바꾸지 마세요. 원문에 명시된 확인 범위로 표현하세요.`);
+    const environmentDependency = /(?:PC|컴퓨터|기기|브라우저|서버|운영체제)(?:\s*환경)?\s*의존성/i;
+    if (environmentDependency.test(visible) && !environmentDependency.test(source) && !explicitRestriction.test(source))
+      issues.push(`${n}장: 원문에 명시되지 않은 환경 의존성을 만들지 마세요. 실제로 확인된 환경을 관찰 메모로 남기세요.`);
     for (const number of (
       c.title +
       " " +
@@ -267,6 +301,20 @@ export function recoveryFor(
       state: "waiting_input",
       message:
         "AI 연결 또는 이용 권한 확인이 필요합니다. 연결을 확인한 뒤 이어서 제작할 수 있습니다.",
+    };
+  if (code === "ANALYSIS_EVIDENCE_INVALID")
+    return {
+      code,
+      strategy: "rewrite_story",
+      state: "failed",
+      message: "AI 분석의 원문 인용 또는 문단 연결 검수에 실패했습니다. 원문과 완료한 단계는 보존되어 있으며 분석 내용을 수정해야 합니다.",
+    };
+  if (code === "AI_RESPONSE_INVALID")
+    return {
+      code,
+      strategy: "rewrite_story",
+      state: attempt >= 3 ? "failed" : "recovering",
+      message: "AI 응답의 필수 형식 검수를 통과하지 못했습니다. 원문과 완료한 단계를 보존하고 응답을 다시 작성합니다.",
     };
   const strategy: RecoveryStrategy =
     code === "STORY_INVALID" || (code === "IMAGE_INVALID" && node === "render")

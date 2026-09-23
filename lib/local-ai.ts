@@ -4,6 +4,12 @@ import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { hermesEnvironment } from "./provider-env";
+export class LocalResponseError extends AppError {
+  readonly code = "AI_RESPONSE_INVALID";
+  constructor() {
+    super("AI 결과의 형식 검증에 실패했습니다. 원문은 보존했으며 다시 시도할 수 있습니다.", 502);
+  }
+}
 export const localModel = () => process.env.OLLAMA_MODEL || "qwen3.5:4b";
 export const selectedProvider = () =>
   process.env.ATLAS_AI_PROVIDER === "hermes" ? "hermes" : "ollama";
@@ -190,10 +196,7 @@ export async function localStructured<T extends z.ZodType>(
   try {
     value = schema.parse(JSON.parse(content));
   } catch {
-    throw new AppError(
-      "AI 결과의 형식 검증에 실패했습니다. 원문은 보존했으며 다시 시도할 수 있습니다.",
-      502,
-    );
+    throw new LocalResponseError();
   }
   return {
     value,

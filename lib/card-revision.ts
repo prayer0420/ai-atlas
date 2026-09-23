@@ -1,6 +1,10 @@
 import { z } from "zod";
 import { cardBriefSchema, storyCardSchema, validateStoryboard, type CardRun } from "./card-workflow";
 import { designDirection } from "./card-style";
+/** Partial edits must never fall back to rewriting the user's other cards. */
+export function isCardRevision(data: CardRun["data"]) {
+  return !!data.parentRunId || (Number.isInteger(data.editedIndex) && data.editedIndex! >= 0);
+}
 export const cardRevisionSchema = z.object({
   runId: z.string().uuid(), revision: z.number().int().nonnegative(),
   design: z.enum(["cream", "magazine"]).optional(),
