@@ -15,6 +15,15 @@ const config: NextConfig = {
           },
         ],
       },
+      {
+        source: "/embed",
+        headers: [
+          {
+            key: "Content-Security-Policy",
+            value: "frame-ancestors http://127.0.0.1:4190 http://localhost:4190;",
+          },
+        ],
+      },
     ];
   },
 };
