@@ -129,6 +129,8 @@ export function CardStudio({
     if (!alive.current || version !== requestVersion.current) return;
     setResult(data);
     setError("");
+    if (data.run?.state === "completed" && data.run.data.parentRunId)
+      setNotice((current) => current === "수정본 제작을 요청했어요. 검수가 끝나면 새 버전으로 표시됩니다." ? "" : current);
     if (!briefLoaded.current && !dirty.current) {
       setBrief(normalizeCardBrief(data.run?.brief || data.profile));
       briefLoaded.current = true;

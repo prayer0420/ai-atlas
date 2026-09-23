@@ -1,4 +1,9 @@
-import type { Session, SupabaseClient } from "@supabase/supabase-js";
+import type { AuthChangeEvent, Session, SupabaseClient } from "@supabase/supabase-js";
+
+/** Tab focus can emit SIGNED_IN again for the same account. Keep its open editor. */
+export function clearSelectionForAuth(event: AuthChangeEvent, previousId: string | undefined, nextId: string | undefined) {
+  return event === "SIGNED_OUT" || (!!previousId && previousId !== nextId);
+}
 
 export type AuthCallback =
   | { kind: "implicit"; accessToken: string; refreshToken: string }

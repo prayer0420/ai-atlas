@@ -6,6 +6,7 @@ import {
   type Session,
 } from "@supabase/supabase-js";
 import {
+  clearSelectionForAuth,
   cleanAuthCallbackUrl,
   parseAuthCallback,
   restoreBrowserSession,
@@ -193,12 +194,14 @@ export function Workspace() {
             },
           });
           setClient(sb);
+          let sessionUserId: string | undefined;
           const {
             data: { subscription },
           } = sb.auth.onAuthStateChange((event, s) => {
             setSession(s);
-            if (event === "SIGNED_OUT" || event === "SIGNED_IN")
+            if (clearSelectionForAuth(event, sessionUserId, s?.user.id))
               setSelected(null);
+            sessionUserId = s?.user.id;
           });
           sub = () => subscription.unsubscribe();
           const callback = parseAuthCallback(window.location.href);
