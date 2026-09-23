@@ -23,6 +23,9 @@ export const cardBriefSchema = z
       .default("따뜻한 종이와 선명한 색을 사용하는 독립 잡지 편집 디자인"),
     required: z.string().trim().max(1500).default(""),
     design: z.enum(["magazine", "cream"]).default("magazine"),
+    imageProvider: z.enum(["editorial", "comfyui", "openai"]).default("editorial"),
+    imageScope: z.enum(["cover", "all"]).default("cover"),
+    imageQuality: z.enum(["low", "medium", "high"]).default("medium"),
     tone: z.string().trim().max(400).default("친한 동료에게 설명하듯 담백하고 구체적으로"),
     avoid: z.string().trim().max(300).default("과장, 억지 감탄, 자료에 없는 사용 경험"),
   })
@@ -120,6 +123,7 @@ export type CardRun = {
   revision: number;
   attempts: Partial<Record<CardNode, number>>;
   data: {
+    visuals?: Record<string, { state: "requesting" | "queued" | "saved"; provider: "comfyui" | "openai"; key: string; jobId?: string; path?: string; sha256?: string }>;
     parentRunId?: string;
     editedIndex?: number;
     story?: Storyboard;

@@ -1,4 +1,5 @@
 import { admin, AppError, checkDb } from "./server";
+import { persistedCardBrief } from "./card-image-options";
 import {
   CARD_PROMPT_VERSION,
   cardBriefSchema,
@@ -26,7 +27,7 @@ export async function startCards(
   const result = await admin().rpc("ai_atlas_request_cards", {
     p_user_id: userId,
     p_resource_id: resourceId,
-    p_brief: brief,
+    p_brief: persistedCardBrief(brief),
     p_origin: origin,
     p_version: CARD_PROMPT_VERSION,
   });

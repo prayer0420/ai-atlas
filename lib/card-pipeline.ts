@@ -9,6 +9,9 @@ import { readableText, sourceProblem } from "./content-text";
 import { CARD_EDITOR_PROMPT } from "./card-editor-prompt";
 import { CARD_BUCKET, cardSource } from "./card-service";
 import { renderCard } from "./card-renderer";
+import { ensureCardVisual } from "./card-visual-checkpoint";
+import { ImageProviderError } from "./card-image-provider";
+import { normalizeCardBrief } from "./card-style";
 import { sameEditorialContent } from "./card-style";
 import {
   CARD_PROMPT_VERSION,
@@ -41,6 +44,7 @@ export async function executeCardRun(
     .single();
   checkDb(result.error);
   let run = result.data as CardRun;
+  run.brief = normalizeCardBrief(run.brief);
   let source = await cardSource(job.user_id, run.resource_id);
   const checkpoint = async (
     patch: Partial<CardRun>,
@@ -62,6 +66,7 @@ export async function executeCardRun(
         409,
       );
     run = r.data as CardRun;
+    run.brief = normalizeCardBrief(run.brief);
   };
   if (run.input_hash !== source.content_hash) {
     await checkpoint({
@@ -233,10 +238,32 @@ export async function executeCardRun(
         // Keep each verified PNG checkpoint so a process restart does not repeat it.
         for (let i = 0; i < data.story.cards.length; i++) {
           if (manifest.some((a) => a.index === i && a.checked)) continue;
+          const visual = await ensureCardVisual({
+            card: data.story.cards[i], brief: run.brief, index: i,
+            prefix: `${job.user_id}/${run.id}`, previous: data.visuals?.[i],
+            checkpoint: async (state) => {
+              const visuals = { ...data.visuals };
+              if (state) visuals[i] = state; else delete visuals[i];
+              data = { ...data, visuals };
+              await checkpoint({ data, message: `${i + 1}장 삽화 ${state?.state === "saved" ? "저장 완료" : state?.state === "queued" ? "생성 중 · 요청 번호 저장됨" : "생성 요청 중"}` });
+            },
+            storage: {
+              read: async (path) => {
+                const r = await db.storage.from(CARD_BUCKET).download(path);
+                if (r.error || !r.data) throw new ImageProviderError("IMAGE_PROVIDER_STORAGE", "저장된 삽화를 읽지 못했습니다. 새로 생성하지 않고 중단했습니다.");
+                return Buffer.from(await r.data.arrayBuffer());
+              },
+              write: async (path, bytes) => {
+                const r = await db.storage.from(CARD_BUCKET).upload(path, bytes, { contentType: "image/png", upsert: true, cacheControl: "private, max-age=0" });
+                if (r.error) throw new ImageProviderError("IMAGE_PROVIDER_STORAGE", "생성된 삽화 저장에 실패했습니다. 중복 생성을 막기 위해 중단했습니다.");
+              },
+            },
+          });
           const rendered = await renderCard(
             data.story.cards[i],
             i,
             run.brief,
+            0, visual,
           ).catch((error) => {
             if (error instanceof CardWorkflowError)
               throw new CardWorkflowError(
@@ -385,6 +412,12 @@ export async function executeCardRun(
     } catch (e) {
       // Concurrency/lease errors are never repaired by writing through an old claim.
       if (e instanceof AppError && e.status === 409) throw e;
+      if (e instanceof ImageProviderError) {
+        await checkpoint({ state: "waiting_input", error_code: e.code, message: e.message,
+          next_action: e.code === "IMAGE_PROVIDER_SLOW" ? "이어서 제작" : "이미지 연결·설정 확인",
+        }, { node, code: e.code, message: e.message, strategy: "check_connection" });
+        return { runId: run.id, state: run.state };
+      }
       // Preserve the user's other cards instead of rewriting their entire deck.
       if (run.data.parentRunId && e instanceof CardWorkflowError && ["STORY_INVALID", "IMAGE_INVALID"].includes(e.code)) {
         await checkpoint({ state: "waiting_input", error_code: e.code, next_action: "문구 수정",

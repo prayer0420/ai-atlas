@@ -10,6 +10,7 @@ import {
 import { latestCards, publishedCards, startCards, cardProfile } from "@/lib/card-service";
 import { cardHashtags, normalizeCardBrief } from "@/lib/card-style";
 import { cardGraph, imagePrompt } from "@/lib/card-workflow";
+import { imageModeLabel } from "@/lib/card-image-options";
 import { kstDate } from "@/lib/feeds";
 export const dynamic = "force-dynamic";
 type Context = { params: Promise<{ id: string }> };
@@ -70,7 +71,7 @@ export async function GET(req: NextRequest, ctx: Context) {
             : null,
         verification:
           "원문 일치·파일·배치 자동 검수입니다. 최신 사실의 독립 검증과 사람의 최종 교정은 별도로 필요합니다.",
-        imageMode: "편집형 PNG · 사진 생성 AI 미연결",
+        imageMode: imageModeLabel(normalizeCardBrief(publishedRun?.brief || {})),
         prompts:
           publishedRun?.data.story?.cards.map((c, i) => imagePrompt(c, i, normalizeCardBrief(publishedRun.brief))) ||
           [],

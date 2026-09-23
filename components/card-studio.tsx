@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { CardCarousel } from "./card-carousel";
+import { CardImageSettings } from "./card-image-settings";
 import { CardDesignPicker, CardEditor } from "./card-editing";
 import { cardDesigns, normalizeCardBrief } from "@/lib/card-style";
 import type { StoryCard } from "@/lib/card-workflow";
@@ -170,7 +171,7 @@ export function CardStudio({
     } catch (e) { setError((e as Error).message); }
     finally { setBusy(false); }
   }
-  async function revise(change: { design?: CardBrief["design"]; index?: number; card?: Pick<StoryCard, "title" | "copy" | "condition" | "layout" | "items"> }) {
+  async function revise(change: { design?: CardBrief["design"]; imageProvider?: CardBrief["imageProvider"]; imageScope?: CardBrief["imageScope"]; imageQuality?: CardBrief["imageQuality"]; index?: number; card?: Pick<StoryCard, "title" | "copy" | "condition" | "layout" | "items"> }) {
     if (!published) return;
     setBusy(true); setError(""); setNotice("");
     try {
@@ -278,6 +279,15 @@ export function CardStudio({
         (한국 시간 기준)
       </p>
       {!active && (
+        <CardImageSettings brief={brief} disabled={busy} onChange={(value) => { dirty.current = true; setBrief(value); }} />
+      )}
+      {!active && published && (
+        <div className="studio-actions">
+          <button className="secondary-button" disabled={busy || (brief.imageProvider === normalizeCardBrief(published.brief).imageProvider && brief.imageScope === normalizeCardBrief(published.brief).imageScope && brief.imageQuality === normalizeCardBrief(published.brief).imageQuality)}
+            onClick={() => void revise({ imageProvider: brief.imageProvider, imageScope: brief.imageScope, imageQuality: brief.imageQuality })}>원고 유지하고 선택한 이미지 방식 적용</button>
+        </div>
+      )}
+      {!active && (
         <div className="studio-controls">
           {(run?.state === "waiting_input" &&
             run.error_code === "SOURCE_REQUIRED" &&
@@ -361,7 +371,7 @@ export function CardStudio({
                 <button className="secondary-button" disabled={busy} onClick={saveProfile}>내 스타일로 저장</button>
                 <button className="text-button" disabled={busy || !result?.profile} onClick={() => { if (result?.profile) { dirty.current = true; setBrief(normalizeCardBrief(result.profile)); } }}>저장한 스타일 불러오기</button>
               </div>
-              <small className="studio-help">‘꼭 포함할 내용’은 이 자료에만 적용됩니다. 자동 제작은 저장한 스타일로 8장씩 만듭니다.</small>
+              <small className="studio-help">‘꼭 포함할 내용’은 이 자료에만 적용됩니다. 이미지 방식도 함께 저장됩니다. 자동 제작은 저장한 설정으로 하루 최대 3건·각 8장입니다. OpenAI를 저장하면 자동 제작에도 API 요금이 발생합니다.</small>
               {complete && (
                 <button
                   className="secondary-button"
@@ -489,6 +499,7 @@ export function CardStudio({
             index={selectedIndex} disabled={busy || !!active}
             onSave={(card) => void revise({ index: selectedIndex, card })}
           />}
+          {normalizeCardBrief(published.brief).imageProvider !== "editorial" && <p className="studio-help">문구·디자인 수정 시에도 선택한 범위의 삽화를 새로 생성합니다. OpenAI는 추가 API 요금이 발생합니다. 생성 그림의 내용은 게시 전 직접 확인해 주세요.</p>}
           <details className="studio-process">
             <summary>완성본 디자인 바꾸기 · {cardDesigns[normalizeCardBrief(published.brief).design].name}</summary>
             <p className="studio-help">원고를 유지하고 모든 장의 디자인을 바꿉니다. 디자인을 선택하면 수정본 제작을 시작합니다.</p>

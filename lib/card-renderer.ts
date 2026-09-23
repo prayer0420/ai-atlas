@@ -99,6 +99,7 @@ export async function renderCard(
   index: number,
   brief: CardBrief,
   fit = 0,
+  visual?: Buffer,
 ) {
   brief = normalizeCardBrief(brief);
   const cream = brief.design === "cream";
@@ -363,6 +364,17 @@ export async function renderCard(
     }
     // The numbered steps composition above already matches the note aesthetic.
   }
+  if (visual) {
+    const art = h("img", { src: `data:image/png;base64,${visual.toString("base64")}`, width: 928, height: card.items.length ? 300 : 440,
+      style: { width: 928, height: card.items.length ? 300 : 440, objectFit: "cover", borderRadius: index % 3 === 1 ? 24 : 0 } });
+    const heading = text(card.title, card.title.length > 20 ? 50 : 62, { fontWeight: 700, lineHeight: 1.2, letterSpacing: -2 });
+    const copy = text(card.copy, card.copy.length > 55 ? 38 : 44);
+    const notes = box({ gap: 12, flexDirection: "row", flexWrap: "wrap" }, ...card.items.map((x) =>
+      box({ width: 448, gap: 7, padding: 16, background: dark ? "#333333" : highlight }, text(x.label, 29, { fontWeight: 700 }), x.detail ? text(x.detail, 25) : null)));
+    scene = box({ gap: 24 },
+      ...(index % 3 === 0 ? [heading, art, copy] : index % 3 === 1 ? [art, heading, copy] : [heading, copy, art]),
+      notes, text("AI 생성 삽화 · 실제 화면·사진 아님", 20, { color: dark ? paper : blue }));
+  }
   // Fit a dense but valid composition before asking the editor to alter meaning.
   // Only the content region scales; source conditions and page numbers stay legible.
   if (fit > 0) scene = fitScene(scene, fit === 1 ? 0.9 : 0.78);
@@ -475,7 +487,7 @@ export async function renderCard(
         overflow.push("서로 다른 문구의 영역이 겹칩니다.");
     }
   if (overflow.length) {
-    if (fit < 2) return renderCard(card, index, brief, fit + 1);
+    if (fit < 2) return renderCard(card, index, brief, fit + 1, visual);
     throw new CardWorkflowError(
       "IMAGE_INVALID",
       "문구를 안전 영역 안에 배치하지 못했습니다.",
