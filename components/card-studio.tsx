@@ -1,6 +1,9 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { CardCarousel } from "./card-carousel";
+import { CardDesignPicker, CardEditor } from "./card-editing";
+import { cardDesigns, normalizeCardBrief } from "@/lib/card-style";
+import type { StoryCard } from "@/lib/card-workflow";
 import {
   Download,
   LoaderCircle,
@@ -19,6 +22,8 @@ import {
 } from "@/lib/card-workflow";
 
 type ResponseData = {
+  profile: CardBrief;
+  hashtags: string[];
   run: CardRun | null;
   publishedRun: CardRun | null;
   stale: boolean;
@@ -109,6 +114,8 @@ export function CardStudio({
   const [result, setResult] = useState<ResponseData | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState("");
+  const [selectedIndex, setSelectedIndex] = useState(0);
   const [brief, setBrief] = useState<CardBrief>(() =>
     cardBriefSchema.parse({}),
   );
@@ -122,8 +129,8 @@ export function CardStudio({
     if (!alive.current || version !== requestVersion.current) return;
     setResult(data);
     setError("");
-    if (!briefLoaded.current && data.run && !dirty.current) {
-      setBrief(data.run.brief);
+    if (!briefLoaded.current && !dirty.current) {
+      setBrief(normalizeCardBrief(data.run?.brief || data.profile));
       briefLoaded.current = true;
     }
   }, [resourceId, api]);
@@ -152,6 +159,29 @@ export function CardStudio({
     !result?.stale;
   const complete = run?.state === "completed" && !result?.stale;
   const published = result?.publishedRun || (complete ? run : null);
+  async function saveProfile() {
+    setBusy(true); setError(""); setNotice("");
+    try {
+      await api("/api/cards/profile", { method: "PUT", body: JSON.stringify({ ...brief, required: "" }) });
+      setNotice("내 스타일을 저장했어요. 다음 자료부터 이 설정으로 만듭니다.");
+      await refresh();
+    } catch (e) { setError((e as Error).message); }
+    finally { setBusy(false); }
+  }
+  async function revise(change: { design?: CardBrief["design"]; index?: number; card?: Pick<StoryCard, "title" | "copy" | "condition" | "layout" | "items"> }) {
+    if (!published) return;
+    setBusy(true); setError(""); setNotice("");
+    try {
+      await api(`/api/resources/${resourceId}/cards/revision`, { method: "POST", body: JSON.stringify({ runId: published.id, revision: published.revision, ...change }) });
+      setNotice("수정본 제작을 요청했어요. 검수가 끝나면 새 버전으로 표시됩니다.");
+      await refresh();
+    } catch (e) { setError((e as Error).message); }
+    finally { setBusy(false); }
+  }
+  async function copyText(value: string) {
+    try { await navigator.clipboard.writeText(value); setNotice("복사했어요."); }
+    catch { setError("복사 권한을 확인해 주세요. 아래 문구를 직접 선택해 복사할 수도 있습니다."); }
+  }
   async function start() {
     setBusy(true);
     setError("");
@@ -228,6 +258,7 @@ export function CardStudio({
           {error}
         </div>
       )}
+      {notice && <p className="studio-notice" role="status">{notice}</p>}
       {!result && !error ? (
         <p role="status">제작 상태를 확인하고 있습니다…</p>
       ) : null}
@@ -276,14 +307,17 @@ export function CardStudio({
             </button>
           )}
           <details className="studio-settings">
-            <summary>독자·목적·장수 조정</summary>
+            <summary>내 스타일·제작 설정</summary>
             <div className="studio-fields">
+              <CardDesignPicker value={brief.design} onChange={(design) => { dirty.current = true; setBrief({ ...brief, design }); }} disabled={busy} />
               {(
                 [
                   ["audience", "읽을 사람"],
                   ["purpose", "목적"],
                   ["brand", "브랜드·계정명"],
                   ["mood", "분위기"],
+                  ["tone", "말투"],
+                  ["avoid", "피할 표현"],
                   ["required", "꼭 포함할 내용"],
                 ] as const
               ).map(([key, label]) => (
@@ -294,6 +328,7 @@ export function CardStudio({
                     maxLength={
                       key === "required"
                         ? 1500
+                        : key === "tone" ? 400 : key === "avoid" ? 300
                         : key === "brand"
                           ? 40
                           : key === "audience"
@@ -320,6 +355,11 @@ export function CardStudio({
                   }}
                 />
               </label>
+              <div className="studio-actions">
+                <button className="secondary-button" disabled={busy} onClick={saveProfile}>내 스타일로 저장</button>
+                <button className="text-button" disabled={busy || !result?.profile} onClick={() => { if (result?.profile) { dirty.current = true; setBrief(normalizeCardBrief(result.profile)); } }}>저장한 스타일 불러오기</button>
+              </div>
+              <small className="studio-help">‘꼭 포함할 내용’은 이 자료에만 적용됩니다. 자동 제작은 저장한 스타일로 8장씩 만듭니다.</small>
               {complete && (
                 <button
                   className="secondary-button"
@@ -429,7 +469,7 @@ export function CardStudio({
             <p>{published.data.story.direction}</p>
             <small>{result?.imageMode} · 1080×1350 · 각각의 PNG 파일</small>
           </div>
-          <CardCarousel key={published.id}>
+          <CardCarousel key={published.id} onIndexChange={setSelectedIndex}>
             {published.data.story.cards.map((card, i) => (
               <CardImage
                 key={`${published.id}-${i}`}
@@ -441,9 +481,26 @@ export function CardStudio({
               />
             ))}
           </CardCarousel>
+          {published.data.story.cards[selectedIndex] && <CardEditor
+            key={`${published.id}:${selectedIndex}`}
+            card={published.data.story.cards[selectedIndex]}
+            index={selectedIndex} disabled={busy || !!active}
+            onSave={(card) => void revise({ index: selectedIndex, card })}
+          />}
+          <details className="studio-process">
+            <summary>완성본 디자인 바꾸기 · {cardDesigns[normalizeCardBrief(published.brief).design].name}</summary>
+            <p className="studio-help">원고를 유지하고 모든 장의 디자인을 바꿉니다. 디자인을 선택하면 수정본 제작을 시작합니다.</p>
+            <CardDesignPicker value={normalizeCardBrief(published.brief).design} disabled={busy || !!active}
+              onChange={(design) => { if (design !== normalizeCardBrief(published.brief).design) void revise({ design }); }} />
+          </details>
           <section className="studio-caption">
             <h3>게시글 캡션</h3>
+            <div className="studio-actions">
+              <button className="secondary-button" onClick={() => void copyText([published.data.story!.caption, result?.hashtags.join(" "), result?.sources.join("\n")].filter(Boolean).join("\n\n"))}>게시글 전체 복사</button>
+              <button className="text-button" onClick={() => void copyText(published.data.story!.caption)}>캡션만 복사</button>
+            </div>
             <p>{published.data.story.caption}</p>
+            {!!result?.hashtags.length && <><h3>해시태그</h3><p>{result.hashtags.join(" ")}</p><button className="text-button" onClick={() => void copyText(result.hashtags.join(" "))}>해시태그 복사</button></>}
             <h3>출처</h3>
             {result?.sources.map((source) =>
               /^https?:\/\//.test(source) ? (

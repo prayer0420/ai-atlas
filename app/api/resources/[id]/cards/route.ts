@@ -7,7 +7,8 @@ import {
   uuid,
   ensureAIAllowed,
 } from "@/lib/server";
-import { latestCards, publishedCards, startCards } from "@/lib/card-service";
+import { latestCards, publishedCards, startCards, cardProfile } from "@/lib/card-service";
+import { cardHashtags, normalizeCardBrief } from "@/lib/card-style";
 import { cardGraph, imagePrompt } from "@/lib/card-workflow";
 import { kstDate } from "@/lib/feeds";
 export const dynamic = "force-dynamic";
@@ -52,6 +53,8 @@ export async function GET(req: NextRequest, ctx: Context) {
       {
         run,
         publishedRun,
+        profile: await cardProfile(user.id),
+        hashtags: cardHashtags(source.tags),
         policy: {
           automaticStarted: usage.data?.length || 0,
           automaticLimit: 3,
@@ -69,7 +72,7 @@ export async function GET(req: NextRequest, ctx: Context) {
           "원문 일치·파일·배치 자동 검수입니다. 최신 사실의 독립 검증과 사람의 최종 교정은 별도로 필요합니다.",
         imageMode: "편집형 PNG · 사진 생성 AI 미연결",
         prompts:
-          publishedRun?.data.story?.cards.map((c, i) => imagePrompt(c, i, publishedRun.brief)) ||
+          publishedRun?.data.story?.cards.map((c, i) => imagePrompt(c, i, normalizeCardBrief(publishedRun.brief))) ||
           [],
       },
       { headers: { "Cache-Control": "no-store" } },

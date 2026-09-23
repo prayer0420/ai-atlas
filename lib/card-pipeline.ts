@@ -9,6 +9,7 @@ import { readableText, sourceProblem } from "./content-text";
 import { CARD_EDITOR_PROMPT } from "./card-editor-prompt";
 import { CARD_BUCKET, cardSource } from "./card-service";
 import { renderCard } from "./card-renderer";
+import { sameEditorialContent } from "./card-style";
 import {
   CARD_PROMPT_VERSION,
   CardWorkflowError,
@@ -309,7 +310,17 @@ export async function executeCardRun(
               "저장된 이미지의 크기·내용 검수를 통과하지 못했습니다.",
             );
         }
-        const reviewed = await structured(
+        let inheritedReview = false;
+        if (data.parentRunId) {
+          const parent = await db.from("ai_atlas_card_runs").select("data")
+            .eq("id", data.parentRunId).eq("user_id", job.user_id)
+            .eq("resource_id", run.resource_id).eq("input_hash", source.content_hash)
+            .eq("state", "completed").maybeSingle();
+          checkDb(parent.error);
+          inheritedReview = !!parent.data?.data.qa?.passed && !!parent.data?.data.story
+            && sameEditorialContent(parent.data.data.story, data.story);
+        }
+        const reviewed = inheritedReview ? { value: { passed: true, issues: [] as string[] } } : await structured(
           z.object({
             passed: z.boolean(),
             issues: z.array(z.string().max(240)).max(8),
@@ -339,7 +350,7 @@ export async function executeCardRun(
             "한글 글꼴·배치 안전 영역",
             "원문 인용·수치 일치",
             "문구 길이·중복·구도 다양성",
-            "AI 편집 검수: 문장·흐름·조건·원문 근거",
+            inheritedReview ? "동일 원고의 기존 AI 편집 검수 유지 · 이미지 재검수" : "AI 편집 검수: 문장·흐름·조건·원문 근거",
             "캡션·출처 제공",
           ],
         };
@@ -374,6 +385,14 @@ export async function executeCardRun(
     } catch (e) {
       // Concurrency/lease errors are never repaired by writing through an old claim.
       if (e instanceof AppError && e.status === 409) throw e;
+      // Preserve the user's other cards instead of rewriting their entire deck.
+      if (run.data.parentRunId && e instanceof CardWorkflowError && ["STORY_INVALID", "IMAGE_INVALID"].includes(e.code)) {
+        await checkpoint({ state: "waiting_input", error_code: e.code, next_action: "문구 수정",
+          data: { ...run.data, issues: e.issues },
+          message: "수정본에서 확인할 부분이 있습니다. 이전 완성본은 유지됩니다. " + e.issues.slice(0, 2).join(" "),
+        });
+        return { runId: run.id, state: run.state };
+      }
       const recovery = recoveryFor(node, e, attempt);
       const host = source.source_url
         ? new URL(source.source_url).hostname

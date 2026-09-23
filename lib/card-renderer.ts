@@ -10,6 +10,7 @@ import path from "node:path";
 import { createHash } from "node:crypto";
 import satori from "satori";
 import sharp from "sharp";
+import { cardDesigns, normalizeCardBrief } from "./card-style";
 import {
   CARD_SIZE,
   CardWorkflowError,
@@ -34,10 +35,6 @@ function loadFonts() {
     })),
   ));
 }
-const paper = "#F4F0E6",
-  ink = "#202021",
-  red = "#EE513B",
-  blue = "#2C49C6";
 const box = (style: CSSProperties, ...children: ReactNode[]) =>
   h(
     "div",
@@ -103,8 +100,11 @@ export async function renderCard(
   brief: CardBrief,
   fit = 0,
 ) {
+  brief = normalizeCardBrief(brief);
+  const cream = brief.design === "cream";
+  const { paper, ink, red, blue, highlight } = cardDesigns[brief.design];
   const compact = fit > 0;
-  const dark = card.layout === "statement";
+  const dark = card.layout === "statement" && !cream;
   const accent = index % 2 ? blue : red;
   const bodySize =
     (card.copy.length > 55 ? 48 : card.copy.length > 40 ? 56 : 64) -
@@ -313,6 +313,56 @@ export async function renderCard(
         ),
       );
   }
+  if (cream) {
+    const heading = text(card.title, compact ? 64 : 76, { fontWeight: 700, lineHeight: 1.22, letterSpacing: -2.5 });
+    const note = (x: StoryCard["items"][number], i: number) => box(
+      { padding: compact ? 23 : 30, gap: 12, background: "#FFFDFA", border: "2px solid #DAD3C6", borderLeft: `7px solid ${i % 2 ? blue : red}` },
+      text(x.label, compact ? 32 : 38, { fontWeight: 700 }),
+      x.detail ? text(x.detail, compact ? 27 : 31) : null,
+    );
+    const highlighted = box({ padding: compact ? 26 : 36, background: highlight, borderRadius: 4 }, body);
+    if (card.layout === "statement") {
+      scene = box({ height: card.condition ? 770 : 880, justifyContent: "center", gap: 50 },
+        text(card.title, 38, { color: blue, fontWeight: 700 }),
+        box({ width: 100, height: 8, background: red }),
+        text(card.copy, compact ? 65 : 78, { fontWeight: 700, lineHeight: 1.45, letterSpacing: -2 }),
+      );
+    } else if (card.layout === "comparison") {
+      scene = box({ gap: 46 }, heading,
+        box({ flexDirection: "row", gap: 24, marginTop: 20 }, ...card.items.map((x, i) => box(
+          { width: 452, minHeight: compact ? 240 : 320, padding: 30, gap: 24, background: i ? "#E3E9E8" : "#F1E4D4", borderTop: `6px solid ${i ? blue : red}` },
+          text(x.label, 42, { fontWeight: 700 }), x.detail ? text(x.detail, 34) : null,
+        ))), body);
+    } else if (card.layout === "closing") {
+      scene = box({ height: card.condition ? 760 : 880, justifyContent: "space-between" },
+        heading,
+        box({ padding: compact ? 32 : 46, gap: 25, background: "#FFFDFA", border: `2px solid ${blue}`, borderRadius: 8 },
+          box({ width: 88, height: 8, background: red }), body, ...card.items.map(note)),
+      );
+    } else if (card.layout === "scene") {
+      scene = box({ gap: compact ? 42 : 64 },
+        text(card.title, compact ? 80 : 96, { fontWeight: 700, lineHeight: 1.18, letterSpacing: -4, maxWidth: 870 }),
+        box({ width: 150, height: 9, background: red }),
+        highlighted,
+        box({ gap: 18 }, ...card.items.map(note)),
+      );
+    } else if (card.layout === "stack") {
+      scene = box({ gap: 38 }, heading, body,
+        box({ gap: 20, marginTop: 10 }, ...card.items.map((x, i) => box({ marginLeft: i % 2 ? 55 : 0, marginRight: i % 2 ? 0 : 55 }, note(x, i)))),
+      );
+    } else if (card.layout === "conversation") {
+      scene = box({ gap: 40 }, heading,
+        box({ padding: 40, background: "#E3E9E8", borderRadius: "24px 24px 24px 0", marginRight: 55 }, body),
+        box({ gap: 18, marginLeft: 55 }, ...card.items.map(note)),
+        text("이해를 돕기 위한 대화 구성", 23, { color: "#746E63" }),
+      );
+    } else if (card.layout === "relation") {
+      scene = box({ gap: 38 }, heading, highlighted,
+        box({ gap: 12 }, ...card.items.flatMap((x, i) => [i ? text("↓", 30, { color: blue, alignSelf: "center" }) : null, note(x, i)])),
+      );
+    }
+    // The numbered steps composition above already matches the note aesthetic.
+  }
   // Fit a dense but valid composition before asking the editor to alter meaning.
   // Only the content region scales; source conditions and page numbers stay legible.
   if (fit > 0) scene = fitScene(scene, fit === 1 ? 0.9 : 0.78);
@@ -335,8 +385,8 @@ export async function renderCard(
         paddingBottom: 34,
         borderBottom: `1px solid ${dark ? "#696969" : "#BDB6A7"}`,
       },
-      card.role,
-      brief.brand || "",
+      text(card.role, 25, { maxWidth: 680 }),
+      text("CARD NEWS", 23, { color: dark ? paper : blue }),
     ),
     h(
       "div",
@@ -370,10 +420,11 @@ export async function renderCard(
         flexDirection: "row",
         justifyContent: "space-between",
         fontSize: 24,
+        ...(cream ? { borderTop: "1px solid #CEC5B5", paddingTop: 20 } : {}),
         color: dark ? "#D3CCBE" : "#696256",
       },
-      brief.brand || "",
-      `${String(index + 1).padStart(2, "0")} / ${String(brief.count).padStart(2, "0")}`,
+      text(brief.brand || "", brief.brand.length > 28 ? 18 : 24, { maxWidth: 750 }),
+      text(`${String(index + 1).padStart(2, "0")} / ${String(brief.count).padStart(2, "0")}`, 24),
     ),
   );
   const overflow: string[] = [];

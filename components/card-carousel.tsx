@@ -3,12 +3,13 @@ import { Children, useEffect, useRef, useState, type ReactNode } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
 /** Native horizontal scrolling keeps touch, trackpad and keyboard navigation aligned. */
-export function CardCarousel({ children }: { children: ReactNode }) {
+export function CardCarousel({ children, onIndexChange }: { children: ReactNode; onIndexChange?: (index: number) => void }) {
   const slides = Children.toArray(children);
   const track = useRef<HTMLDivElement>(null);
   const [index, setIndex] = useState(0);
   const visible = useRef(index);
   visible.current = index;
+  useEffect(() => { onIndexChange?.(index); }, [index, onIndexChange]);
   useEffect(() => {
     const el = track.current;
     if (!el) return;

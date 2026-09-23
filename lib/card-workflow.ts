@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const CARD_PROMPT_VERSION = "ko-editorial-2026-09-22-v2";
+export const CARD_PROMPT_VERSION = "ko-editorial-2026-09-23-v3";
 export const CARD_SIZE = { width: 1080, height: 1350 } as const;
 export const cardBriefSchema = z
   .object({
@@ -22,6 +22,9 @@ export const cardBriefSchema = z
       .max(240)
       .default("따뜻한 종이와 선명한 색을 사용하는 독립 잡지 편집 디자인"),
     required: z.string().trim().max(1500).default(""),
+    design: z.enum(["magazine", "cream"]).default("magazine"),
+    tone: z.string().trim().max(400).default("친한 동료에게 설명하듯 담백하고 구체적으로"),
+    avoid: z.string().trim().max(300).default("과장, 억지 감탄, 자료에 없는 사용 경험"),
   })
   .strict();
 export type CardBrief = z.infer<typeof cardBriefSchema>;
@@ -117,6 +120,8 @@ export type CardRun = {
   revision: number;
   attempts: Partial<Record<CardNode, number>>;
   data: {
+    parentRunId?: string;
+    editedIndex?: number;
     story?: Storyboard;
     sourceHash?: string;
     model?: string;
@@ -326,5 +331,5 @@ export function cardRunProgress(
 }
 
 export function imagePrompt(card: StoryCard, index: number, brief: CardBrief) {
-  return `한국어 인스타그램 카드뉴스 ${index + 1}/${brief.count} 한 장만 제작. 세로 4:5, 1080×1350. 여러 장을 합치지 않는다. 독립 잡지 편집 디자인. 종이색 #F4F0E6, 검정 #202021, 붉은색 #EE513B, 파랑 #2C49C6. 한글 산세리프 Noto Sans KR, 선명한 제목과 충분한 여백. 독자: ${brief.audience}. 목적: ${brief.purpose}. 분위기: ${brief.mood}. 역할: ${card.role}. 구도: ${card.composition}. 필요한 사진·평면 그림·콜라주를 내용 설명에만 사용한다. 실제 서비스 화면이나 사용 후기로 오해할 화면은 금지. 정확한 한국어 문구: 제목 «${card.title}», 본문 «${card.copy}»${card.condition ? `, 조건·제한 «${card.condition}»` : ""}. 시각 항목: ${card.items.map((x) => `«${x.label}»: «${x.detail}»`).join("; ") || "추가 글자 없음"}. ${brief.brand ? `작은 서명 «${brief.brand}».` : "브랜드명·서명은 생략."} 장 번호 ${String(index + 1).padStart(2, "0")} / ${String(brief.count).padStart(2, "0")}. 본문 2~4줄, 한 장에 핵심 하나. 한글 오탈자·잘림 금지. 장식적 3D 아이콘, 과장 문구, 큰 글씨 위+아이콘 아래의 기계적 반복 금지.`;
+  return `한국어 인스타그램 카드뉴스 ${index + 1}/${brief.count} 한 장만 제작. 세로 4:5, 1080×1350. 여러 장을 합치지 않는다. ${brief.design === "cream" ? "크림 노트 편집 디자인. 크림색 #F6F1E7, 네이비 #182C3C, 따뜻한 강조색 #F1DEA9, 청회색 #385C70." : "독립 잡지 편집 디자인. 종이색 #F4F0E6, 검정 #202021, 붉은색 #EE513B, 파랑 #2C49C6."} 한글 산세리프 Noto Sans KR, 선명한 제목과 충분한 여백. 독자: ${brief.audience}. 목적: ${brief.purpose}. 분위기: ${brief.mood}. 역할: ${card.role}. 구도: ${card.composition}. 필요한 사진·평면 그림·콜라주를 내용 설명에만 사용한다. 실제 서비스 화면이나 사용 후기로 오해할 화면은 금지. 정확한 한국어 문구: 제목 «${card.title}», 본문 «${card.copy}»${card.condition ? `, 조건·제한 «${card.condition}»` : ""}. 시각 항목: ${card.items.map((x) => `«${x.label}»: «${x.detail}»`).join("; ") || "추가 글자 없음"}. ${brief.brand ? `작은 서명 «${brief.brand}».` : "브랜드명·서명은 생략."} 장 번호 ${String(index + 1).padStart(2, "0")} / ${String(brief.count).padStart(2, "0")}. 본문 2~4줄, 한 장에 핵심 하나. 한글 오탈자·잘림 금지. 장식적 3D 아이콘, 과장 문구, 큰 글씨 위+아이콘 아래의 기계적 반복 금지.`;
 }

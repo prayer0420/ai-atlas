@@ -119,6 +119,10 @@ for (const scenario of [
           assert.match(url, /user_id=eq\./);
           return json([]);
         }
+        if (url.includes("/ai_atlas_preferences")) {
+          assert.match(url, /user_id=eq\./);
+          return json({ card_profile: {} });
+        }
         if (url.includes("/ai_atlas_card_runs")) {
           assert.match(url, /user_id=eq\./);
           return json([]);

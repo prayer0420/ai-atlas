@@ -9,6 +9,7 @@ import {
 } from "@/lib/server";
 import { CARD_BUCKET, cardSource, publishedCards, assertCardPath } from "@/lib/card-service";
 import { imagePrompt } from "@/lib/card-workflow";
+import { cardHashtags, normalizeCardBrief } from "@/lib/card-style";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export async function GET(
@@ -48,12 +49,15 @@ export async function GET(
     if (all) {
       const story = run.data.story!;
       files["caption.txt"] = strToU8(story.caption);
+      const hashtags = cardHashtags(source.tags).join(" ");
+      files["hashtags.txt"] = strToU8(hashtags);
+      files["posting.txt"] = strToU8([story.caption, hashtags, source.source_url || "사용자가 제공한 본문"].filter(Boolean).join("\n\n"));
       files["sources.txt"] = strToU8(
         `${source.source_url || "사용자가 제공한 본문"}\n\n원문 기준 정리입니다. 독립적인 최신 사실 검증은 수행하지 않았습니다.\n${story.caveats.join("\n")}`,
       );
       files["image-prompts.txt"] = strToU8(
         story.cards
-          .map((c, i) => imagePrompt(c, i, run.brief))
+          .map((c, i) => imagePrompt(c, i, normalizeCardBrief(run.brief)))
           .join("\n\n---\n\n"),
       );
       files["storyboard.json"] = strToU8(JSON.stringify(story, null, 2));

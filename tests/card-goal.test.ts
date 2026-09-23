@@ -19,6 +19,8 @@ import {
 } from "../app/api/resources/[id]/cards/route";
 import { GET as assetGet } from "../app/api/resources/[id]/cards/asset/route";
 import { assertCardPath } from "../lib/card-service";
+import { cardRevisionSchema, prepareCardRevision } from "../lib/card-revision";
+import { sameEditorialContent, cardHashtags } from "../lib/card-style";
 const alice = "11111111-1111-4111-8111-111111111111",
   bob = "22222222-2222-4222-8222-222222222222";
 const source =
@@ -175,6 +177,38 @@ test("all eight layouts render separate Korean 1080x1350 PNGs without overflow",
     assert.ok(result.bytes > 15000);
     await writeFile(`.local/card-preview/${i + 1}.png`, result.buffer);
   }
+});
+test("cream design renders all eight layouts with brand and source conditions", async () => {
+  const brief = cardBriefSchema.parse({ design: "cream", brand: "편집 실험실" });
+  await mkdir(".local/cream-preview", { recursive: true });
+  for (const [i, original] of fixtureStory.cards.entries()) {
+    const card = { ...original, condition: "제공된 자료를 정리한 설명용 이미지입니다. 원문의 조건을 함께 확인하세요." };
+    const result = await renderCard(card, i, brief);
+    assert.ok(result.checked);
+    assert.equal(result.width, 1080);
+    assert.equal(result.height, 1350);
+    await writeFile(`.local/cream-preview/${i + 1}.png`, result.buffer);
+  }
+});
+test("a card revision preserves other cards and evidence; only unchanged content reuses review", () => {
+  const base = { id: alice, brief: cardBriefSchema.parse({}), input_hash: "source-hash", data: { story: structuredClone(fixtureStory), qa: { passed: true } } } as any;
+  const input = cardRevisionSchema.parse({ runId: alice, revision: 2, index: 0, card: { copy: "모아 둔 자료에서 전하고 싶은 생각을 하나 골라 보세요." } });
+  const edited = prepareCardRevision(base, input, source);
+  assert.deepEqual(edited.data.story.cards.slice(1), base.data.story.cards.slice(1));
+  assert.equal(edited.data.story.cards[0].evidence, base.data.story.cards[0].evidence);
+  assert.notEqual(edited.data.story.cards[0].copy, base.data.story.cards[0].copy);
+  assert.equal(sameEditorialContent(base.data.story, edited.data.story), false);
+  assert.equal("qa" in edited.data, false);
+  const styled = prepareCardRevision(base, { runId: alice, revision: 2, design: "cream" }, source);
+  assert.equal(sameEditorialContent(base.data.story, styled.data.story), true);
+  styled.data.story.cards[1].layout = "scene";
+  assert.equal(sameEditorialContent(base.data.story, styled.data.story), true);
+  styled.data.story.cards[1].condition = "새로운 조건";
+  assert.equal(sameEditorialContent(base.data.story, styled.data.story), false);
+  assert.throws(() => prepareCardRevision(base, { ...input, card: { copy: "비용을 99% 줄이는 방법이라고 알려져 있어요." } }, source), /원문 근거/);
+  assert.throws(() => prepareCardRevision(base, { ...input, card: {} }, source), /바꾼 뒤/);
+  assert.equal(cardRevisionSchema.safeParse({ ...input, card: { evidence: "임의 수정 금지" } }).success, false);
+  assert.deepEqual(cardHashtags(["AI 도구", "#AI도구", "한국어", null, "<script>"]), ["#AI도구", "#한국어", "#script"]);
 });
 test("a two-line source condition is retained without a false overflow failure", async () => {
   const card = { ...fixtureStory.cards[0], condition: "원문의 Example & Company 맞춤 구축 사례입니다. 결과는 담당자가 검토하고 수정해야 합니다." };

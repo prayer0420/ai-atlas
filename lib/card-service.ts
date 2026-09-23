@@ -5,6 +5,11 @@ import {
   type CardRun,
 } from "./card-workflow";
 export const CARD_BUCKET = "ai-atlas-cards";
+export async function cardProfile(userId: string) {
+  const result = await admin().from("ai_atlas_preferences").select("card_profile").eq("user_id", userId).maybeSingle();
+  checkDb(result.error);
+  return cardBriefSchema.parse({ design: "cream", ...result.data?.card_profile });
+}
 export async function startCards(
   userId: string,
   resourceId: string,
@@ -17,7 +22,7 @@ export async function startCards(
       "장수는 3~12장으로 설정하고 독자·목적 등 입력 길이를 확인해 주세요.",
       400,
     );
-  const brief = parsed.data;
+  const brief = cardBriefSchema.parse({ ...await cardProfile(userId), ...input as Record<string, unknown> });
   const result = await admin().rpc("ai_atlas_request_cards", {
     p_user_id: userId,
     p_resource_id: resourceId,
