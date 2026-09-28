@@ -92,7 +92,7 @@ export async function structured<T extends z.ZodType>(
     text: { format: zodTextFormat(schema, name) },
     max_output_tokens: maxTokens,
     ...(/(^|\/)gpt-5/.test(connection.model)
-      ? { reasoning: { effort: "low" as const } }
+      ? { reasoning: { effort: "medium" as const } }
       : {}),
   });
   if (!response.output_parsed)
