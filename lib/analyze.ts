@@ -134,7 +134,7 @@ export async function createLesson(text: string, url: string | null) {
     text: { format: zodTextFormat(generationSchema, "learning_note") },
     max_output_tokens: 14000,
     ...(/(^|\/)gpt-5/.test(model)
-      ? { reasoning: { effort: "low" as const } }
+      ? { reasoning: { effort: "medium" as const } }
       : {}),
   });
   if (!result.output_parsed)
