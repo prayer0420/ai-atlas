@@ -6,6 +6,7 @@ import { structured, claimTask, aiProblem } from "./brain-ai";
 import { wikiBundleSchema, type WikiPage } from "./brain-types";
 import type { Resource } from "./types";
 import { enqueue, queueLocally, localRuntime } from "./automation";
+import { classifyWiki } from "./wiki-classes";
 export function wikiLint(
   pages: WikiPage[],
   resources: { id: string; updated_at: string }[],
@@ -38,6 +39,11 @@ export function wikiLint(
       add("orphan", "다른 위키 문서에서 연결되지 않은 문서입니다.");
     if (p.caveats.length)
       add("review", "검토할 쟁점 " + p.caveats.length + "개가 남아 있습니다.");
+    // 머리말만 읽고 길을 고르려면 요약과 분류 번호가 있어야 한다.
+    if (p.summary.trim().length < 20)
+      add("meta", "요약(description)이 짧아 머리말만으로 내용을 알기 어렵습니다.");
+    if (!classifyWiki([p.title, p.summary, p.slug].join(" ")).matched)
+      add("class", "제목·요약만으로는 분류 번호가 정해지지 않습니다(태그가 없으면 000 미분류). 제목이나 요약에 주제를 드러내 주세요.");
     return checks;
   });
 }
